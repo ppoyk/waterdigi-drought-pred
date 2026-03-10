@@ -9,6 +9,10 @@
 *.png
 *.svg
 
+# Artifacts #
+README_files
+README.html
+
 # R specific files #
 .Rproj.user
 .Rhistory
