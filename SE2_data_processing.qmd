@@ -1,0 +1,255 @@
+
+Data processing is arguable the most challenging and time consuming task in the research pipeline. In this notebook, you will document steps required to convert **raw data** (here, defined as observations collected by researchers, distributed sensor networks, satellites, etc that may or may not have undergone some levels of standard processing by the data provider) into **analysis ready data**, or the specific model object that serves as an input to your modelling framework. Processing geospatial data into analysis ready formats often involves alligning multivatiate observations from different sources in space and or time. We can flesh out a mental model for the processing steps required to generate our analysis ready data by asking the following questions:
+
+| Question	| Processing required |
+------------|----------------------|
+| Where | CRS reprojection, extent, grid alignment, resampling, vector to raster operations, raster to vector operations|
+| When | Time formatting, time zone conversion, synchronization, resampling, compositinng |
+| What | Variable definition, variable extraction, feature engineering, feature reduction, data restructuring |
+| Trust | Error detection, bias detection, outlier detection, QAQC, metadata, data provenance |
+| How	| Formatting, databasing, indexing, batch processing 
+
+Best practices for processing geospatial data:
+* Always check the CRS of a dataset.
+* Think carefully about the spatial and temporal resolution of the process you want to study. Make sure you pick a data source that is not aliased, impacted by limited duration frequency domain resolution, or oversampled. Spatiotemporal resolution is critical.
+* Plot your data and visually confirm correct projections before you automate processes.
+* Automate the processing of large datasets stored as different files; do not copy and paste code to replicate analysis on multiple files.
+
+# SPI & SPEI data processing
+```{r parse-spi-spei-files}
+# Extract variables and dates from SPI & SPEI filenames
+spi_spei_nc_files <- fs::dir_ls(out_dir_final, type="file",glob="*.nc")
+
+# Assuming format: "variable_(infos)_YYYYMM.(geo.infos).nc"
+file_meta <- tibble::tibble(filepath = as.character(spi_spei_nc_files)) |> 
+  dplyr::mutate(
+    filename = fs::path_file(filepath), # Next line: drop the tail infos with "." sep
+    filename_cleaned = stringr::str_split_i(fs::path_ext_remove(filename), "\\.", i=1) 
+  ) |> 
+  tidyr::separate(filename_cleaned, sep = "_",  # Split at the underscore
+    into = c("variable",NA,NA,NA,NA,NA,"time_str")) |> #NAs: distrib,spat_ext,reanalysis,output_stream,ref_per
+  dplyr::mutate(year = as.integer(stringr::str_sub(time_str, 1, 4)),
+                month = as.integer(stringr::str_sub(time_str, 5, 6))
+  ) |> data.table::as.data.table()
+```
+
+```{r interpret-station-coordinates}
+# Get a spatial object of station coordinates
+station_coords <- sf::st_as_sf(stations[,.(station_id=tunnus,lon,lat)],
+                                coords=c("lon","lat"), crs="EPSG:3067") |> # Original crs ETRS-TM35FIN
+    sf::st_transform("OGC:CRS84") # to WGS 84 (CRS84 which is [lon,lat], same as dl'd SPI/SPEI files)  
+```
+
+```{r build-spi-spei-timeseries}
+# A function to process a single variable efficiently
+extract_timeseries <- function(var_name, files_df, pts_sf) {
+    var_files <- files_df[variable == var_name][order(time_str)] # Files for only this var, sort chronologically
+
+    raster_stack <- terra::rast(var_files$filepath) # Create SpatRaster stack. terra handles virtually, saving mem
+
+    # Ensure CRS of supplied points and read NetCDF files match
+    if (! (sf::st_crs(pts_sf) == sf::st_crs(raster_stack))) { # Comparison of `crs` objs is sophisticated
+        message("Converting points' CRS (",sf::st_crs(pts_sf)$input,") to file's CRS (",sf::st_crs(raster_stack)$input,")")
+        pts_sf <- sf::st_transform(pts_sf, sf::st_crs(raster_stack)) # Transform the points to match files
+    }
+    # Convert sf points to terra's SpatVector format
+    pts_vect <- terra::vect(pts_sf)
+    # Ensure that SpatRaster layers are chronological (may be default beavior, but JIC)
+    raster_stack <- raster_stack[[order(terra::time(raster_stack))]]
+    # Extract data
+    extracted <- terra::extract(raster_stack, pts_vect, fun=identity, bind=TRUE, exact=TRUE, ID=FALSE)
+    cat("Point timeseries extracted... ")
+    # Combine with site IDs and tidy into a long format
+    res_long <- tidyr::pivot_longer(
+        data = as.data.frame(extracted), # df rows=points, cols = time layers (var,var.1,var.2 ...)
+        cols = -station_id,
+        names_to="layer_name", values_to="value"
+    ) |> 
+    # Map the chronological time back onto the extracted layers
+    dplyr::group_by(station_id) |> 
+    dplyr::mutate(variable = var_name,
+        time_str=var_files$time_str, year=var_files$year, month=var_files$month
+    ) |> dplyr::ungroup() |> 
+    dplyr::select(station_id, time_str,year,month, variable, value)
+
+    return(res_long)
+}
+
+# Check if a file for SPI & SPEI timeseries for stations already found
+station_spi_spei_path <- fs::path(fs::dir_create("analysis_ready"), "station_spi_spei_ts.csv")
+if (fs::file_exists(station_spi_spei_path)) {
+  station_spi_spei_ts <- data.table::fread(station_spi_spei_path, keepLeadingZeros=TRUE, yaml=TRUE)
+} else {
+  # Extract over each variable (SPI1, SPI3, ..., SPEI36, SPEI48) and bind into one df
+  station_spi_spei_ts <- purrr::map_dfr(unique(file_meta$variable), 
+    ~extract_timeseries(.x, file_meta, station_coords)
+  ) |> as.data.table()
+  # Save for quick access
+  data.table::fwrite(station_spi_spei_ts, station_spi_spei_path, yaml=TRUE)
+}
+
+# Add time column for easier manipulation (not interpreted from csv, faster)
+station_spi_spei_ts[, time := lubridate::make_date(year, month, 1)]
+# Rename drought index column
+data.table::setnames(station_spi_spei_ts, "variable", "dr_ind")
+
+```
+
+
+```{r test-SGI-ts}
+# Aggregate GW levels to yearmon timeseries
+pipedata <- G[paikka_id == 10550, .(g=mean(g)), by=yearmon(pvm)]
+pipedata[, yearmon := lubridate::ym(floor(yearmon)*100 + round(12 * (yearmon %% 1)) + 1)] # Yearmon to date
+pipexts <- xts::as.xts(pipedata, order.by=pipedata$yearmon) # Turn into xts
+# This uses sliding window aggregation!!! Not wanted
+# SEI::aggregate_xts(pipexts, agg_period=2, agg_scale="months", agg_fun="mean", timescale="days", na_thres = 100)
+
+# Reference period to calculate SGI
+pipexts_ref <- pipexts["1980-01-01::2020-12-31"]
+# Calculate SGI
+insertSource("fix_SEI_std_index.R", package = "SEI", functions = "std_index") # Fix SEI::std_index... PR waiting
+pipesgi <- SEI::std_index(pipexts, x_ref=pipexts_ref,
+    dist="kde", index_type="normal",
+    gr_new = factor(xts::.indexmon(pipexts)), gr_ref = factor(xts::.indexmon(pipexts_ref)),
+    return_fit = TRUE
+    )
+xts::tclass(pipesgi$si) <- "POSIXct"
+colnames(pipesgi$si) <- "SGI"
+SEI::plot_sei(pipesgi$si)
+```
+
+```{r construct-SGI-pipe-timeseries}
+# Aggregate GW levels to yearmon timeseries
+G_ym <- data.table::copy(G[, .(g=mean(g)), by=list(paikka_id, yearmon=data.table::yearmon(pvm))])
+G_ym[, time := lubridate::ym(floor(yearmon)*100 + round(12 * (yearmon %% 1)) + 1)] # Yearmon to date
+
+# Function wrapper to calculate SGI
+dt_std_ind <- function(dt, dt_ref) {
+  stopifnot("time" %in% names(dt), "yearmon" %in% names(dt_ref))
+  dt     <- xts::as.xts(dt[order(time),    .(time, g)])
+  dt_ref <- xts::as.xts(dt_ref[order(time),.(time, g)])
+  SEI::std_index(dt, x_ref = dt_ref,
+              dist="kde", index_type="normal", # Gaussian kernel density estimation
+              gr_new = factor(xts::.indexmon(dt)), # Index is evaluated separately for every cal month 
+              gr_ref = factor(xts::.indexmon(dt_ref))
+  )
+}
+ref_period <- c("1980-01-01","2020-12-31") # Reference period for SGI calculations
+
+# Check if a file for calculated SGI already found
+pipe_sgi_path <- fs::path(fs::dir_create("analysis_ready"), "pipe_sgi_long.csv")
+if (fs::file_exists(pipe_sgi_path)) {
+    pipe_sgi_long <- data.table::fread(pipe_sgi_path, keepLeadingZeros=T, yaml=T, colClasses=list(Date="time"))
+} else {
+    message("Calculating SGI timeseries for pipes...")
+    # Calculate SGI for each pipe into elems of a list. Format the list into a long dt.
+    pipe_sgi_xts <- vector("list", uniqueN(G_ym$paikka_id))
+    i <- 1L
+    for (p_id in unique(G_ym$paikka_id)) {
+      pipe_sgi_xts[[i]] <- dt_std_ind(G_ym[paikka_id == p_id], G_ym[paikka_id == p_id & yearmon %between% ref_period])
+      names(pipe_sgi_xts[[i]]) <- paste0("p",p_id) # Name cols with paikka_ids
+      cat(i,"... ")
+      i <- i +1
+    }; rm(i)
+
+    all_p_sgi_wide <- Reduce(\(...) xts::merge.xts(..., all=TRUE, join="outer"), pipe_sgi_xts)
+    pipe_sgi_long <- data.table::melt(as.data.table(all_p_sgi_wide), id.vars="index", variable.name="paikka_id", value.name="sgi") # index refers to the xts time col
+    pipe_sgi_long[, paikka_id := as.integer(stringr::str_sub(paikka_id,2L,-1L))] # Convert paikka_id to num from being colnames
+    # Join station ids
+    pipe_sgi_long <- pipe_sgi_long[pipes,.(time=index, paikka_id, station_id=asema_tunnus, sgi), on="paikka_id", nomatch=NULL]
+    # Save for quick access
+    data.table::fwrite(pipe_sgi_long, pipe_sgi_path, yaml=T)
+}
+
+SEI::plot_sei(xts::as.xts(pipe_sgi_long[paikka_id == 9524,.(time=as.POSIXlt(time),sgi)]))
+
+```
+
+```{r SGI-station-timeseries}
+# Calculate station SGI series by taking a median of all pipes of the station
+station_sgi_long <- pipe_sgi_long[,.(sgi = median(sgi)), by=list(station_id, time)]
+```
+
+```{r drought-index-correlation}
+# (wide approach)
+# Values of SPI & SPEI in wide format for all stations, 1965-2025
+# spi_spei_wide <- data.table::dcast(station_spi_spei_ts, station_id + time ~ dr_ind, value.var="value")
+# (code deleted)
+# (long approach)
+# Merge SGI ts of pipes with station ts of SPI & SPEI
+pipe_sgi_w_dr_inds <- merge(pipe_sgi_long, station_spi_spei_ts,
+                            by=c("station_id","time"), allow.cartesian = T)
+# Function to re-format cor.test output into 1-long lists (output will stay as 1 row when applying in dt)
+dt_cor.test <- function(...) {
+  res_list <- as.list(stats::cor.test(...))
+  res_list[["conf.int.l"]] <- res_list[["conf.int"]][[1]]
+  res_list[["conf.int.u"]] <- res_list[["conf.int"]][[2]]
+  res_list[["conf.int"]] <- NULL;  stopifnot(lapply(res_list, length) == 1L)
+  return(res_list)
+}
+pipe_correlations <- pipe_sgi_w_dr_inds[, dt_cor.test(sgi, value, method="pear"), by=list(paikka_id, dr_ind)]
+
+# Plots
+pipe_correlations |> 
+  dplyr::mutate(dr_ind = factor(dr_ind, levels = gtools::mixedsort(unique(dr_ind)))) |> 
+  ggplot(aes(dr_ind, estimate, color=dr_ind)) +
+      geom_violin() +
+      ggforce::geom_sina(aes(alpha=p.value <= 0.01, group=dr_ind)) +
+      stat_summary(fun.data = "mean_se", color="black")
+      # geom_point(aes(alpha=p.value <= 0.01))
+
+
+
+
+acf(pipe_sgi_long[paikka_id == 10550, sgi], na.action = na.pass)
+acf(pipe_sgi_long[paikka_id == 10550, sgi], na.action = na.exclude)
+
+ccf_test_spei <- station_spi_spei_ts[station_id == pipes[paikka_id == 10550, asema_tunnus] &
+  variable == "SPEI12"
+]
+ccf_test_pipe <- pipe_sgi_long[paikka_id == 10550]
+ccf_test <- merge(ccf_test_spei, ccf_test_pipe, by="dr_ind")
+
+ccf(ccf_test$sgi, ccf_test$value, na.action = na.pass)
+stats::cor.test(ccf_test$sgi, ccf_test$value,  method="pearson")
+
+plot(ccf_test$sgi, ccf_test$value)
+
+```
+
+# Input data description
+Include:
+* source,
+* spatial resolution,
+* temporal resolution,
+* extent,
+* duration,
+* data type,
+* CRS,
+* variable description,
+* encoding details
+
+For each input data set.
+
+## Outputs:
+Describe characteristics of analysis ready dataset:
+* data object(s)
+* temporal and spatial resolution(s)
+* spatial extent and duration(s)
+* CRS
+* variables description(s)
+For each analysis ready dataset
+
+
+
+## Modelling framework:
+What modelling software will these datasets be compatible? If relevant, include software version number and specific applications/libraries/functions.
+
+## Data processing steps:
+Describe operations required to convert raw data to analysis ready data using [plain language](https://www.gov.uk/government/publications/geospatial-glossary/geospatial-glossary)
+
+## How to use this notebook:
+Map data processing steps to code blocks.
+
+This notebook reads from ../{{ cookiecutter.project_name }}_rawdata and writes to ../{{ cookiecutter.project_name }}_processeddata
+
