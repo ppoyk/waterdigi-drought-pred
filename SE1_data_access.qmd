@@ -1,5 +1,5 @@
 ---
-title: Untitled
+title: Download source data
 format: html
 ---
 
@@ -9,7 +9,7 @@ In a reproducible repository, we want all raw data to be stored on an [OGC Compl
 
 The Geoportti project has curated a list of available geospatial and earth systems observations and model outputs. Check here to learn about types of data available: [Geoportti Geodata and Metadata](https://www.geoportti.fi/services/data/).
 
-In Digital Waters, we will utilize the AquaINFRA DDAS for federated searches across dozens of public online geodatabases. Stay tuned for more information on how to search for data within the DIWA DataLab.
+In Digital Waters, we will utilize the AquaINFRA DDAS for federated searches across dozens of public online geodatabases.
 
 Your personal research data, including private or sensitive data, can be stored on [Zenodo](https://zenodo.org/) with a stable digital object identifier (stable download url). Please discuss this with your PI.
 
@@ -27,14 +27,17 @@ All raw source data are **not committed to the repository** to:
 The raw data is stored in the subfolders of `inputs`.
 
 ```{r}
+library("data.table")
+library("ggplot2")
+
 here::i_am("SE1_data_access.qmd")
 root = here::here()
 
-fs::dir_create(c(root, "inputs"), c("manual","auto")) # Ensure folder structure
-
 raw_data_dir = fs::path(root, "inputs") # Define raw data dir var
 
-if (length(fs::dir_ls(fs::path(raw_data_dir, "manual"))) < 4L) { # TODO: set precise number
+fs::dir_create(raw_data_dir, c("manual","auto")) # Ensure folder structure
+
+if (length(fs::dir_ls(fs::path(raw_data_dir, "manual"))) < 4L) { # TODO: set precise number of required manual dls
     stop("Datasets listed in README to require manual inputs are not found")
 }
 ```
@@ -51,11 +54,6 @@ Total required storage: what is the total volume of data that will be downloaded
 Maximum file size: what is the largest individual file size that will be downloaded with this notebook?
 
 ### Make sure you have sufficient storage available to download all data required
-
-```{python}
-!df -k ..
-# the table below prints out how much storate is available in the folder containing your raw_data download directory
-```
 ```{r}
 if ((ps::ps_disk_usage()$available / 2^30) < 100) { # Gb TODO: precise storage req of auto datasets
     stop("Insufficient disk space for the automatically downloaded datasets")
@@ -104,32 +102,6 @@ download_file <- function(url, out_dir) {
 }
 ```
 
-<span style='color:red'>delete before publishing</span> 
-
-# Example option 1: Downloading from a list of URLs in inputs/datalinks.txt
-To use this option, copy and paste download urls of relevant datasets into the text folder located at inputs/datalinks.txt.
-
-```{r}
-# ===== USER SETTINGS =====
-LINKS_FILE <- "inputs/auto_datalinks.txt"
-OUTPUT_DIR <-  raw_data_dir
-DELAY_SECONDS <- 2  # Check your data provider's API access instructions to see what delay requirements exist
-TIMEOUT <- 30       # Seconds before request timeout, check your data provider's API access instructions to change as needed.
-# =========================
-```
-
-```{r}
-message("Downloading automatic datasets...")
-auto_links <- readLines(LINKS_FILE)
-if (length(auto_links) < 1L) {stop("No data links found in ",LINKS_FILE)}
-for (url in auto_links) {
-    download_file(url, OUTPUT_DIR)
-    if (DELAY_SECONDS > 0) message("Waiting ",DELAY_SECONDS," s..."); Sys.sleep(DELAY_SECONDS)
-}
-message("🎉 Automatic datasets downloaded")
-rm(auto_links)
-```
-
 ```{r load-manual-data}
 G <- data.table::fread(fs::path(raw_data_dir,"manual/G_reg.csv"), keepLeadingZeros = T)
 stations <- data.table::fread(fs::path(raw_data_dir,"manual/asemat.csv"), keepLeadingZeros = T)
@@ -137,149 +109,77 @@ gwas <- data.table::fread(fs::path(raw_data_dir,"manual/pv_alueet.csv"), keepLea
 pipes <- data.table::fread(fs::path(raw_data_dir,"manual/paikat.csv"), keepLeadingZeros = T)
 ```
 
-<span style='color:red'>delete before publishing</span> 
-
-# Option 2: using regular expressions to define URLs
-    
-## Decoding the file structure of online geodatabases
-Just like we can use code to find and access files on our local machine, we can use code to find and access files on public geodatabases. Since these geodatabases are version controlled, providing code that links to the online files helps prevent us from making redundant copies of data on the internet. Programatically accessing public geodatabases requires that we understand how the database itself has been organized.
-
-  - Click on the following link to the National Oceanic and Atmospheric Association databse website: https://psl.noaa.gov/data/gridded/
-  - Navigate to the CEP/NCAR Reanalysis dataset"
-  - Of the seven sections they've divided data into, click on "Surface"
-  - Under "Air Temperature: Daily", click "See list"
-  - Under "Surface", click "See list"
-
-### TASK: Right click on the first link in the list, and select "copy link". Paste that link address below:
-https://downloads.psl.noaa.gov/Datasets/ncep.reanalysis.dailyavgs/surface/air.sig995.1948.nc
-
-There is anatomy to this link.
-* https://downloads.psl.noaa.gov/Datasets: this is the stable location of many different types surface level (psl) meteorological data stored by NOAA.gov
-* ncep.reanalsys.dailavgs : this gives us information about a specific dataset, here we are accessing the NCAR NCEP reanalysis data, daily averages
-* air.sig995. : this tells us we are getting air tempearture at the near surface (indicated here by geopotential height of 995mBar pressure level
-* 1948 : this is a year
-* .nc : this is our file extension
-
-In the link above, we can break the filepath down into substrings, using basic text commands:
-
 ```{r}
 # ===== USER SETTINGS FOR SPI & SPEI DATA =====
 OUTPUT_DIR <- fs::dir_create(raw_data_dir,"auto","ecmwfr_spi_spei_monthly")
-TIMEOUT <- 1000 # Seconds before req timeout
+TIMEOUT <- 2000 # Seconds before req timeout
 # =========================
 ```
 
 ```{r download-spi-spei}
-tryCatch(invisible(ecmwfr::wf_get_key()), error=\(e){stop("Add European Centre for Medium-Range Weather Forecasts API key (ecmwfr::wf_set_key())")}) # Check for key
+tryCatch(invisible(ecmwfr::wf_get_key()), error=\(e){ # Check for ECMWFR API key
+    warning("Add European Centre for Medium-Range Weather Forecasts API key (ecmwfr::wf_set_key())")
+    ecmwfr::wf_set_key()
+    })
 # For more on ecmwfr datasets: ecmwfr::wf_dataset_info(), ecmwfr::wf_datasets()
 
-ecmwfr_spi_spei_req_year <- function(y) {
+ecmwf_spi_spei_req_year <- function(y) {
     list(dataset_short_name = "derived-drought-historical-monthly",
         variable = c("standardised_precipitation_index",
                     "standardised_precipitation_evapotranspiration_index"),
         accumulation_period = c("1","3","6","12","24","36","48"),
-        version = "1_0",
-        product_type = "reanalysis",
+        version = "1_0", product_type = "reanalysis",
         dataset_type = "consolidated_dataset",
         year = as.character(y),
         month = c("01","02","03","04","05","06","07","08","09","10","11","12"),
         area = c(70, 18, 59, 32), # Nmax, Emin, Nmin, Emax, WGS84
         target = paste0("ecmwfr_spi_spei_",y,".nc")  # Output filename & format
+        # ("target" potentially converts to zip if the req would return many files)
     )
 }
-# test_dl <- ecmwfr::wf_request(ecmwfr_spi_spei_req_year(1966), path=fs::dir_create(raw_data_dir,"auto","test"), time_out = 1000)
+# test_dl <- ecmwfr::wf_request(ecmwf_spi_spei_req_year(1966), path=fs::dir_create(raw_data_dir,"auto","test"), time_out = 1000)
 
-message("Downloading monthly SPI and SPEI...")
-message("This can take around half an hour")
-ecmwfr::wf_request_batch(
-    request_list = lapply(1965:2024, ecmwfr_spi_spei_req_year),
-    workers = 20, # Max 20?
-    time_out = TIMEOUT, #s
-    path = OUTPUT_DIR
-)
-# Unzip all downloads into parent folder, delete zips
-dl_zips <- fs::dir_ls(OUTPUT_DIR, type="file", glob="*.zip")
-stopifnot(all(fs::is_file(dl_zips)))
-for (f in dl_zips) { unzip(f, exdir = fs::path_dir(f));  unlink(f) }
-rm(dl_zips)
+out_dir_dls <- fs::dir_create(OUTPUT_DIR, "downloads") # Dir for dls from API
+out_dir_final <- fs::dir_create(OUTPUT_DIR, "unzipped") # Dir for final usable files
 
-# Possible to download also qual criteria for SPI & SPEI
-# Similar req to above, but variables "probability_of_zero_precipitation_spi", "test_for_normality_spi", "test_for_normality_spei"
-# All three cover all years in the dataset (no year needed in req)
+all_ecmwf_reqs <- lapply(1965:2024, ecmwf_spi_spei_req_year)
 
-message("SPI and SPEI datasets downloaded.")
+# Drop the API calls which files already exists
+wanted_req_files <- fs::path_ext_remove(sapply(all_ecmwf_reqs, \(req) req$target))
+existing_req_files <- fs::path_ext_remove(fs::path_file(fs::dir_ls(out_dir_dls, type="file")))
+needed_ecmwf_reqs <- all_ecmwf_reqs[which(!(wanted_req_files %in% existing_req_files))]
+
+if (!rlang::is_empty(needed_ecmwf_reqs)) {
+    message("Downloading monthly SPI and SPEI...")
+    message("This can take around half an hour")
+    sent_reqs <- ecmwfr::wf_request_batch(
+        request_list = needed_ecmwf_reqs,
+        workers = min(20, length(needed_ecmwf_reqs)), # Max 20?
+        time_out = TIMEOUT, #s
+        retry = 20, # sec to wait between api calls
+        path = out_dir_dls # Into subfolder of downloads
+    )
+    # Unzip all downloads into subfolder
+    all_dl_zips <- fs::dir_ls(out_dir_dls, type="file", glob="*.zip")
+    stopifnot(all(fs::is_file(all_dl_zips)))
+    for (f in all_dl_zips) { unzip(f, exdir = out_dir_final) }
+    rm(all_dl_zips, sent_reqs)
+    # Possible to download also quality criteria for SPI & SPEI
+    # Similar req to above, but variables "probability_of_zero_precipitation_spi", "test_for_normality_spi", "test_for_normality_spei"
+    # All three cover all years in the dataset (no year needed in req)
+    message("SPI and SPEI datasets downloaded.")
+} else { message("All requested SPI & SPEI original files found") }
+rm(wanted_req_files, existing_req_files, needed_ecmwf_reqs, all_ecmwf_reqs, out_dir_dls)
 ```
 
-```{r parse-spi-spei-files}
-# Extract variables and dates from SPI & SPEI filenames
-spi_spei_nc_files <- fs::dir_ls(OUTPUT_DIR, type="file",glob="*.nc")
 
-# Assuming format: "variable_(infos)_YYYYMM.(geo.infos).nc"
-file_meta <- tibble::tibble(filepath = as.character(spi_spei_nc_files)) |> 
-  dplyr::mutate(
-    filename = fs::path_file(filepath), # Next line: drop the tail infos with "." sep
-    filename_cleaned = stringr::str_split_i(fs::path_ext_remove(filename), "\\.", i=1) 
-  ) |> 
-  tidyr::separate(filename_cleaned, sep = "_",  # Split at the underscore
-    into = c("variable",NA,NA,NA,NA,NA,"time_str")) |> #NAs: distrib,spat_ext,reanalysis,output_stream,ref_per
-  dplyr::mutate(year = as.integer(stringr::str_sub(time_str, 1, 4)),
-                month = as.integer(stringr::str_sub(time_str, 5, 6))
-  ) |> data.table::as.data.table()
-```
-
-```{r}
-# Get a spatial object of station coordinates
-station_coords <- sf::st_as_sf(stations[,.(station_id=tunnus,lon,lat)],
-                                coords=c("lon","lat"), crs="EPSG:3067") |> # Original crs ETRS-TM35FIN
-    sf::st_transform("EPSG:4326") # to WGS84
-```
-
-```{r build-spi-spei-timeseries}
-# A function to process a single variable efficiently
-extract_timeseries <- function(var_name, files_df, pts_sf) {
-    var_files <- files_df[variable == var_name][order(time_str)] # Files for only this var, sort chronologically
-
-    raster_stack <- terra::rast(var_files$filepath) # Create SpatRaster stack. terra handles virtually, saving mem
-
-    # Ensure CRS of supplied points and read NetCDF files match
-    if (sf::st_crs(pts_sf)$input != sf::st_crs(raster_stack)$input) {
-        message("Converting points' CRS (",sf::st_crs(pts_sf)$input,") to file's CRS (",sf::st_crs(raster_stack)$input,")")
-        pts_sf <- sf::st_transform(pts_sf, sf::st_crs(raster_stack)) # Transform the points to match files
-    }
-    # Convert sf points to terra's SpatVector format
-    pts_vect <- terra::vect(pts_sf)
-    browser()
-    # Ensure that SpatRaster layers are chronological (may be default beavior, but JIC)
-    raster_stack <- raster_stack[[order(terra::time(raster_stack))]]
-    # Extract data
-    extracted <- terra::extract(raster_stack, pts_vect, fun=identity, bind=TRUE, exact=TRUE, ID=FALSE)
-
-    # Combine with site IDs and tidy into a long format
-    res_long <- tidyr::pivot_longer(
-        data = as.data.frame(extracted), # df rows=points, cols = time layers (var,var.1,var.2 ...)
-        cols = -station_id,
-        names_to="layer_name", values_to="value"
-    ) |> 
-    # Map the chronological time back onto the extracted layers
-    dplyr::group_by(station_id) |> 
-    dplyr::mutate(variable = var_name,
-        time_str=var_files$time_str, year=var_files$year, month=var_files$month
-    ) |> dplyr::ungroup() |> 
-    dplyr::select(station_id, time_str,year,month, variable, value)
-
-    return(res_long)
-}
-
-# Extract over each variable (SPI1, SPI3, ..., SPEI36, SPEI48) and bind into one df
-station_spi_spei_ts <- purrr::map_dfr(unique(file_meta$variable), 
-  ~extract_timeseries(.x, file_meta, station_coords)
-)
-```
 
 Download FMI's daily gridded data from around all pipes where natural QC'd GW data exists.
 Data DOI reference: https://doi.org/10.35614/ISSN-2341-6408-IK-2022-11-RL
 AWS S3 link assumed to be stable enough
+
 ```{r}
+stop()
 BUFF_M <- 200
 areas_around_pipes <- pipes[paikka_id %in% G$paikka_id][,.(lon_min=lon-BUFF_M, lon_max=lon+BUFF_M,lat_min=lat-BUFF_M, lat_max=lat+BUFF_M), by=paikka_id]
 metR::GlanceNetCDF("https://fmi-gridded-obs-daily-1km.s3-eu-west-1.amazonaws.com/Netcdf/Tday/tday_1978.nc",
@@ -295,64 +195,4 @@ summary(test_r)
 
 plot(test_r)
 ```
-
-<span style='color:red'>delete before publishing</span> 
-# Option 3: generate list of filepaths using API for an online geodatabase
-#TODO: Update with AquaINFRA
-
-There are dozens of rich online geodatabases for governmental, public, and research data available. Most of this geodatabases will provide both a graphical user interface (GUI) and advanced programming interface (API) to search, select, and download their data holdings. The code below was generated using the Copernicus Climate Data Store (CDS) web-based GUI. This graphical user interface returns a scripted python API call that I can copy into my notebook to download my data. To generate this code, I went to the following website:
-
-(https://cds.climate.copernicus.eu/datasets/reanalysis-era5-single-levels-monthly-means?tab=download)
-
-And filled out the form to specify my search parameters. I then went to the bottom of the page, and under "Corresponding API Code", seleceted "Show API Request Code"
-
-Please note that I must download the cdsapi python package to execute this request, and indicate my Copernicus login credentials by modifying the $HOME/.cdsapirc file created by this python library for this to work.
-[How to configure the Copernicus Climate Data Store API on your machine](https://cds.climate.copernicus.eu/how-to-api)
-
-Learn more about geodatabase authentication protocols on the "Data access authentication" notebook in the how-to page on https://github.com/DigitalWaters-fi.
-
-```{python}
- import cdsapi
-    
-    dataset = "reanalysis-era5-single-levels-monthly-means"
-    request = {
-        "product_type": ["monthly_averaged_reanalysis"],
-        "variable": [
-            "2m_temperature",
-            "total_precipitation",
-            "clear_sky_direct_solar_radiation_at_surface",
-            "instantaneous_surface_sensible_heat_flux",
-            "surface_latent_heat_flux",
-            "runoff"
-        ],
-        "year": [
-            "2000", "2001", "2002",
-            "2003", "2004", "2005",
-            "2006", "2007", "2008",
-            "2009", "2010", "2011",
-            "2012", "2013", "2014",
-            "2015", "2016", "2017",
-            "2018", "2019", "2020"
-        ],
-        "month": [
-            "01", "02", "03",
-            "04", "05", "06",
-            "07", "08", "09",
-            "10", "11", "12"
-        ],
-        "time": ["00:00"],
-        "data_format": "grib",
-        "download_format": "unarchived",
-        "area": [72, 19, 58, 32]
-    }
-    
-    client = cdsapi.Client()
-    client.retrieve(dataset, request).download()
-```
-
-## Need help?
-
-Search, ask, and answer data access questions at https://github.com/orgs/DigitalWaters-fi/discussions
-
-Tag #dataaccess
 
