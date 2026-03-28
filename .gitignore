@@ -4,6 +4,7 @@
 
 # Script output #
 /output*
+/analysis_ready*
 *.html
 *.pdf
 *.png
