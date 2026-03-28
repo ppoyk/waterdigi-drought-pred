@@ -1,19 +1,63 @@
 
-Data processing is arguable the most challenging and time consuming task in the research pipeline. In this notebook, you will document steps required to convert **raw data** (here, defined as observations collected by researchers, distributed sensor networks, satellites, etc that may or may not have undergone some levels of standard processing by the data provider) into **analysis ready data**, or the specific model object that serves as an input to your modelling framework. Processing geospatial data into analysis ready formats often involves alligning multivatiate observations from different sources in space and or time. We can flesh out a mental model for the processing steps required to generate our analysis ready data by asking the following questions:
+# Input data description
+* GW data
+  * daily measurements of GW level in monitoring pipes
+  * point-source time series, approx. 2-week intervals
+  * Time series have a variable duration and temporal coverage. They mostly cover the years 1975-2024, with only little gaps
+  * From Syke
+  * Pipe metadata has coordinates, CRS is ETRS-TM35FIN
+* SPI & SPEI drought indices
+  * monthly time series
+  * rasterized, global but dl'd data cropped to Finland
+  * from ECMWF
+  * Time series have a temporal coverage of years 1960-2024.
+  * CRS is WGS84
 
-| Question	| Processing required |
-------------|----------------------|
-| Where | CRS reprojection, extent, grid alignment, resampling, vector to raster operations, raster to vector operations|
-| When | Time formatting, time zone conversion, synchronization, resampling, compositinng |
-| What | Variable definition, variable extraction, feature engineering, feature reduction, data restructuring |
-| Trust | Error detection, bias detection, outlier detection, QAQC, metadata, data provenance |
-| How	| Formatting, databasing, indexing, batch processing 
+## Outputs:
+* Object `pipe_sgi_long`:
+  Constructed time series of Standardized Groundwater index for all monitoring pipes.
+  380+ point-source timeseries.
+  Variables: time, station ID, pipe ID, SGI value. SGI calculated with monthly groupings, Gaussian kernel.
+  Time series have a variable duration and temporal coverage.
+  However, they mostly cover the years 1975-2024, with only little gaps
+  The time series do not have the pipe metadata attached. (coordinates, elevation, GW area ID)
+  Instad, it is contained within the source data, and joined as needed.
 
-Best practices for processing geospatial data:
-* Always check the CRS of a dataset.
-* Think carefully about the spatial and temporal resolution of the process you want to study. Make sure you pick a data source that is not aliased, impacted by limited duration frequency domain resolution, or oversampled. Spatiotemporal resolution is critical.
-* Plot your data and visually confirm correct projections before you automate processes.
-* Automate the processing of large datasets stored as different files; do not copy and paste code to replicate analysis on multiple files.
+* Object `station_spi_spei_ts`:
+  SPI & SPEI index values read for the center points of all stations. The source data is mentioned in the README.
+  53 point-source timeseries.
+  Variables: station ID, year+month, year, month, drought index type, drought index value.
+  Time series have a temporal coverage of years 1960-2024.
+  The time series do not have the station metadata attached. (coordinates)
+  Instad, it is contained within the source data, and joined as needed.
+
+Both analysis ready datasets have a monthly temporal resolution.
+Both datasets are contained within Finland, and cover the most of Finland
+
+
+## Modelling framework:
+The modelling is done entirely using the freely available R-language (v.4.5.0).
+The reproducibility of this workflow is ensure with `renv`.
+Libraries should be handled automatically, and all required are listed in `renv.lock`
+
+## Data processing steps:
+(Describe operations required to convert raw data to analysis ready data using [plain language](https://www.gov.uk/government/publications/geospatial-glossary/geospatial-glossary))
+
+SPI & SPEI index values are read from the .nc files. (Point-like time series for all stations)
+Erroneys (< -1000) SPI & SPEI index values are removed. No ohter outliers.
+
+The original GW data is aggregated into montly time series for all pipes.
+From these, SGI timeseries are calculated for all pipes.
+Stations also get their aggregated monthly SGI series (pipe median)
+
+SGI series are then correlated with SPI & SPEI time series.
+**The interpretation and visualization are still in progress. The correlation might also get more sophisticated.**
+
+## How to use this notebook:
+This notebook can be run with Quarto installed. The easiest way to achieve this is to use the Positron IDE.
+The notebook SE1_data_access.qmd should be run in the same env/session than this. Variables defined/loaded there are used here.
+This can be achieved using the reproducibility wrapper (`run_reproducibility.R`)
+
 
 # SPI & SPEI data processing
 ```{r parse-spi-spei-files}
@@ -38,6 +82,7 @@ file_meta <- tibble::tibble(filepath = as.character(spi_spei_nc_files)) |>
 station_coords <- sf::st_as_sf(stations[,.(station_id=tunnus,lon,lat)],
                                 coords=c("lon","lat"), crs="EPSG:3067") |> # Original crs ETRS-TM35FIN
     sf::st_transform("OGC:CRS84") # to WGS 84 (CRS84 which is [lon,lat], same as dl'd SPI/SPEI files)  
+# TODO: Ensure that coordinates are correct, in teh approx. center of the pipes!
 ```
 
 ```{r build-spi-spei-timeseries}
@@ -87,14 +132,20 @@ if (fs::file_exists(station_spi_spei_path)) {
   # Save for quick access
   data.table::fwrite(station_spi_spei_ts, station_spi_spei_path, yaml=TRUE)
 }
+rm(station_spi_spei_path)
 
 # Add time column for easier manipulation (not interpreted from csv, faster)
 station_spi_spei_ts[, time := lubridate::make_date(year, month, 1)]
 # Rename drought index column
 data.table::setnames(station_spi_spei_ts, "variable", "dr_ind")
-
 ```
 
+```{r QC-SPI-SPEI}
+hist(station_spi_spei_ts$value)
+# Eliminate clear error values of SPI & SPEI timeseries
+station_spi_spei_ts <- station_spi_spei_ts[value > -1000]
+hist(station_spi_spei_ts$value)
+```
 
 ```{r test-SGI-ts}
 # Aggregate GW levels to yearmon timeseries
@@ -119,7 +170,7 @@ SEI::plot_sei(pipesgi$si)
 ```
 
 ```{r construct-SGI-pipe-timeseries}
-# Aggregate GW levels to yearmon timeseries
+# Aggregate GW levels to yearmon timeseries for all pipes
 G_ym <- data.table::copy(G[, .(g=mean(g)), by=list(paikka_id, yearmon=data.table::yearmon(pvm))])
 G_ym[, time := lubridate::ym(floor(yearmon)*100 + round(12 * (yearmon %% 1)) + 1)] # Yearmon to date
 
@@ -160,6 +211,7 @@ if (fs::file_exists(pipe_sgi_path)) {
     # Save for quick access
     data.table::fwrite(pipe_sgi_long, pipe_sgi_path, yaml=T)
 }
+rm(pipe_sgi_path)
 
 SEI::plot_sei(xts::as.xts(pipe_sgi_long[paikka_id == 9524,.(time=as.POSIXlt(time),sgi)]))
 
@@ -199,6 +251,15 @@ pipe_correlations |>
       # geom_point(aes(alpha=p.value <= 0.01))
 
 
+station_sgi_w_dr_inds <- merge(station_sgi_long, station_spi_spei_ts, by=c("station_id","time"))
+station_correlations <- station_sgi_w_dr_inds[, dt_cor.test(sgi, value, method="pear"), by=list(station_id, dr_ind)]
+station_correlations |> 
+  dplyr::mutate(dr_ind = factor(dr_ind, levels = gtools::mixedsort(unique(dr_ind)))) |> 
+  ggplot(aes(dr_ind, estimate, color=dr_ind)) +
+      geom_violin() +
+      ggforce::geom_sina(aes(alpha=p.value <= 0.01, group=dr_ind)) +
+      stat_summary(fun.data = "mean_se", color="black")
+      # geom_point(aes(alpha=p.value <= 0.01))
 
 
 acf(pipe_sgi_long[paikka_id == 10550, sgi], na.action = na.pass)
@@ -216,40 +277,4 @@ stats::cor.test(ccf_test$sgi, ccf_test$value,  method="pearson")
 plot(ccf_test$sgi, ccf_test$value)
 
 ```
-
-# Input data description
-Include:
-* source,
-* spatial resolution,
-* temporal resolution,
-* extent,
-* duration,
-* data type,
-* CRS,
-* variable description,
-* encoding details
-
-For each input data set.
-
-## Outputs:
-Describe characteristics of analysis ready dataset:
-* data object(s)
-* temporal and spatial resolution(s)
-* spatial extent and duration(s)
-* CRS
-* variables description(s)
-For each analysis ready dataset
-
-
-
-## Modelling framework:
-What modelling software will these datasets be compatible? If relevant, include software version number and specific applications/libraries/functions.
-
-## Data processing steps:
-Describe operations required to convert raw data to analysis ready data using [plain language](https://www.gov.uk/government/publications/geospatial-glossary/geospatial-glossary)
-
-## How to use this notebook:
-Map data processing steps to code blocks.
-
-This notebook reads from ../{{ cookiecutter.project_name }}_rawdata and writes to ../{{ cookiecutter.project_name }}_processeddata
 
