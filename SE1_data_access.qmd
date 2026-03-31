@@ -175,27 +175,7 @@ if (!rlang::is_empty(needed_ecmwf_reqs)) {
 rm(wanted_req_files, existing_req_files, needed_ecmwf_reqs, all_ecmwf_reqs, out_dir_dls)
 ```
 
-
-
 Download FMI's daily gridded data from around all pipes where natural QC'd GW data exists.
 Data DOI reference: https://doi.org/10.35614/ISSN-2341-6408-IK-2022-11-RL
 AWS S3 link assumed to be stable enough
-
-```{r}
-stop()
-BUFF_M <- 200
-areas_around_pipes <- pipes[paikka_id %in% G$paikka_id][,.(lon_min=lon-BUFF_M, lon_max=lon+BUFF_M,lat_min=lat-BUFF_M, lat_max=lat+BUFF_M), by=paikka_id]
-metR::GlanceNetCDF("https://fmi-gridded-obs-daily-1km.s3-eu-west-1.amazonaws.com/Netcdf/Tday/tday_1978.nc",
-    subset = list(lon=areas_around_pipes[1,seq(lon_min,lon_max)],
-                  lat=areas_around_pipes[1,seq(lat_min,lat_max)])
-)
-test_r <- terra::rast("C:/Users/ppoykko19/Koodi/waterdigi-drought-pred/inputs/manual/monthly_19610101T000000_19610101T000000_20101201T000000_latlon.grb2")
-```
-
-```{r}
-test_r <- terra::rast("C:/Users/ppoykko19/Koodi/waterdigi-drought-pred/inputs/manual/scPDSI_1901-2024_global_ cru_ts4.09/scPDSI.cru_ts4.09_1901-2024.bams.2025.GLOBAL.IGBP.WHC.nc")
-summary(test_r)
-
-plot(test_r)
-```
-
+[DRAFT, likely will be deleted]
