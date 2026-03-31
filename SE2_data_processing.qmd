@@ -58,6 +58,11 @@ This notebook can be run with Quarto installed. The easiest way to achieve this 
 The notebook SE1_data_access.qmd should be run in the same env/session than this. Variables defined/loaded there are used here.
 This can be achieved using the reproducibility wrapper (`run_reproducibility.R`)
 
+```{r}
+#| label: "common"
+#| include: FALSE
+source("_common.R") # Knitr hook to enable global R-env when rendering many .qmd
+```
 
 # SPI & SPEI data processing
 ```{r parse-spi-spei-files}

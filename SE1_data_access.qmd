@@ -27,9 +27,12 @@ All raw source data are **not committed to the repository** to:
 The raw data is stored in the subfolders of `inputs`.
 
 ```{r}
-library("data.table")
-library("ggplot2")
+#| label: "common"
+#| include: FALSE
+source("_common.R") # Knitr hook to enable global R-env when rendering many .qmd
+```
 
+```{r}
 here::i_am("SE1_data_access.qmd")
 root = here::here()
 

@@ -2,6 +2,9 @@
 /inputs/manual/*
 /inputs/auto/*
 
+# Custom global environment during quarto rendering
+environment.RData
+
 # Script output #
 /output*
 /analysis_ready*
