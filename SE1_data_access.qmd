@@ -1,30 +1,49 @@
 ---
-title: Download source data
+title: "Standard Element 1"
+subtitle: "Download source data"
+author: "Pietari Pöykkö"
+date: last-modified
 format: html
 ---
 
-<span style='color:red'>delete before publishing</span>
+The Finnish natural-state groundwater data central in this analysis is not available
+as one contained dataset. This data has not been productized. Instead, data must
+be downloaded manually through the Hertta open data portal of Syke, with a manual
+selection of stations. Link to this portal is provided in README. Additionally,
+I have trimmed down the data from natural-state stations to only contain maximally
+long time series. Moreover, I have quality-controlled this dataset. The QC
+procedure is described in Pöykkö et al. 2026.
+I have not asked for a permission to share this customized dataset in a data repository.
 
-In a reproducible repository, we want all raw data to be stored on an [OGC Compliant](https://www.ogc.org/standards/) and [FAIR (Findable, Accessible, Interoperable, Reusable) Compliant](https://www.go-fair.org/fair-principles/) online geodatabases. You will use this code to reference these stable data download url's. This does two things:
+Running this notebook additionally requires an API key for European Centre for Medium-Range Weather Forecasts services.
+This key can be obtained by registering an ECMWF account on <https://www.ecmwf.int/>, and viewing the key from your personal profile.
+The script will ask for this key automatically, or it can be provided by running the command `ecmwfr::wf_set_key()`
 
-The Geoportti project has curated a list of available geospatial and earth systems observations and model outputs. Check here to learn about types of data available: [Geoportti Geodata and Metadata](https://www.geoportti.fi/services/data/).
+The raw data is stored in the project subfolders of `inputs`.
+These are not committed to the repository, using .gitignore.
 
-In Digital Waters, we will utilize the AquaINFRA DDAS for federated searches across dozens of public online geodatabases.
 
-Your personal research data, including private or sensitive data, can be stored on [Zenodo](https://zenodo.org/) with a stable digital object identifier (stable download url). Please discuss this with your PI.
+## Data description
+Describe your data sources here. Reference the table provided on your README.
 
-Data can also be stored and accessed on institutional networks (e.g. ftp or https servers), cloud storage accounts (Google Cloud, Amazon AWS, Azure), or on the [CSC.fi](CSC.fi) infrastructure.
+## How to run this notebook
+Provide a detailed description of inputs, input directories, outputs, and output directories.
 
-# SE1_data_access
-<span style='color:goldenrod'>modify before publishing</span> 
 
-All raw source data are **not committed to the repository** to:
-- keep the repo lightweight.
-- prevent large file versioning.
-- maintain reproducibility.
-- separate raw vs processed data.
+## Storage requirements
+The total storage required for running this notebook is 1.1 Gb.
+ - 330 Mb will be downloaded
+ - 650 Mb for the unzipped downloads
+ - 50 Mb for manually accessed GW data
+Largest individual downloaded file is around 5 Mb.
+Largest of all files is the main GW datafile at 13 Mb.
 
-The raw data is stored in the subfolders of `inputs`.
+### Make sure you have sufficient storage available to download all data required
+```{r}
+if ((ps::ps_disk_usage()$available / 2^30) < 2) { # Gb
+    stop("Insufficient disk space for the automatically downloaded datasets")
+}
+```
 
 ```{r}
 #| label: "common"
@@ -32,7 +51,7 @@ The raw data is stored in the subfolders of `inputs`.
 source("_common.R") # Knitr hook to enable global R-env when rendering many .qmd
 ```
 
-```{r}
+```{r init}
 here::i_am("SE1_data_access.qmd")
 root = here::here()
 
@@ -45,66 +64,36 @@ if (length(fs::dir_ls(fs::path(raw_data_dir, "manual"))) < 4L) { # TODO: set pre
 }
 ```
 
-<span style='color:goldenrod'>modify before publishing</span> 
-## Data description
-Describe your data sources here. Reference the table provided on your README.
-
-## How to run this notebook
-Provide a detailed description of inputs, input directories, outputs, and output directories.
-
-## Storage requirements
-Total required storage: what is the total volume of data that will be downloaded with this notebook?
-Maximum file size: what is the largest individual file size that will be downloaded with this notebook?
-
-### Make sure you have sufficient storage available to download all data required
-```{r}
-if ((ps::ps_disk_usage()$available / 2^30) < 100) { # Gb TODO: precise storage req of auto datasets
-    stop("Insufficient disk space for the automatically downloaded datasets")
-}
-```
-
-<span style='color:red'>delete before publishing</span>
-
-# Methods to automate data access 
-Accessing data automatically using URLs (uniform resource locators, also known as web addresses) is fundamental to FAIR research (Findable, Accessible, Interoperable, Reproducible), in that it allows for others to access your data without creating redundant copies of files. We are particularly interested in using persistent identfiers (PIDs), which are URLs that do not change over time. One type of PID that we are very familiar with in research is a DOI (Digital Object Identifier). These are assigned to our publications, for example. 
-
-There are three options to specify download URLs in this code:
-1) List stable URLs in a "datalinks.txt" file in your "inputs" folder, and then iterate over these to download them. This option is ideal for smaller files that do not require user authentication to access.
-2) Generate list of stable URLs using database intuition: this is ideal for ftp and http servers, where databasing syntax is easily inferred from the file URLs, without need for an API (advanced programming interface) to modify the search. Here, we can use regular expressions to guess the URLs for data representing different locations, points in time, or variables, or customize URLs to include details like our own username and password.
-3) Accessing data though an API (Advanced Programming Interface): APIs allow us to use code to interact with database search parameters, find relavant data, and access download links for that relevant data. APIs help with searching complex, heterogenous geodatabases. For very large datasets (reanalysis data, satellite remote sensing data, etc), certain APIs allow us to subset data (say for a specific location) prior to downloading, reducing storage requirements. APIs often require environmnetal configuration for access control. If so, **access configuration details must be specified in README**
-
-## Handling generated or simulated data
-For experiments relying on synthetic data, please include synthetic data generation script in this notebook. Be sure to use features like set seed to ensure consistency with random number generation. Save all outputs to rawdata folder.
-
-
-<span style='color:red'>delete before publishing</span>
-
-# Define download file helper functions
-This function will download files from URLs to the raw data folder created in the parent folder of the current repository. 
+## Define download file helper functions
+These functions will download files from URLs to the raw data folder created in the current repository. 
 ```{r helpers-for-download}
 get_filename_from_url <- function(url) {
     httr2::url_parse(url)$path |> basename()
 }
-download_file <- function(url, out_dir) {
-    old_o <-  options(timeout = max(300, getOption("timeout")))
+download_file <- function(url, out_dir, t_out) {
+    old_o <-  options(timeout = max(300, getOption("timeout"))) # why this is needed...
+    on.exit({options(old_o)}, add=TRUE)
+
     filename <- get_filename_from_url(url)
 
     filepath <- fs::path(out_dir, filename)
     if (fs::file_exists(filepath)) {
-        print("File already exists, skipping: ", filename)
-        options(old_o); return(TRUE)
+        message("File already exists, skipping: ", filename)
+        return(TRUE)
     } else {
-        print("Downloading: ", filename)
+        message("Downloading: ", filename)
         req <- httr2::request(url) |>
-            httr2::req_retry(max_tries=3, max_seconds=TIMEOUT, retry_on_failure=T,backoff=\(x){2}) |>
+            httr2::req_retry(max_tries=3, max_seconds=t_out,
+                retry_on_failure=TRUE,backoff=\(x){2}) |>
             httr2::req_progress()
         httr2::req_perform(req, path = filepath)
-        print("✅ Saved: ", filepath)
-        options(old_o); return(TRUE)
+        message("✅ Saved: ", filepath)
+        return(TRUE)
     }
 }
 ```
 
+## Read in manually accessed GW data
 ```{r load-manual-data}
 G <- data.table::fread(fs::path(raw_data_dir,"manual/G_reg.csv"), keepLeadingZeros = T)
 stations <- data.table::fread(fs::path(raw_data_dir,"manual/asemat.csv"), keepLeadingZeros = T)
@@ -112,18 +101,21 @@ gwas <- data.table::fread(fs::path(raw_data_dir,"manual/pv_alueet.csv"), keepLea
 pipes <- data.table::fread(fs::path(raw_data_dir,"manual/paikat.csv"), keepLeadingZeros = T)
 ```
 
+
+## Download SPI & SPEI timeseries data
 ```{r}
 # ===== USER SETTINGS FOR SPI & SPEI DATA =====
 OUTPUT_DIR <- fs::dir_create(raw_data_dir,"auto","ecmwfr_spi_spei_monthly")
 TIMEOUT <- 2000 # Seconds before req timeout
-# =========================
+# =============================================
 ```
 
 ```{r download-spi-spei}
-tryCatch(invisible(ecmwfr::wf_get_key()), error=\(e){ # Check for ECMWFR API key
-    warning("Add European Centre for Medium-Range Weather Forecasts API key (ecmwfr::wf_set_key())")
-    ecmwfr::wf_set_key()
-    })
+tryCatch(invisible(ecmwfr::wf_get_key()), # Check for ECMWFR API key
+    error=\(e){ warning("Add ECMWF API key (ecmwfr::wf_set_key())")
+                ecmwfr::wf_set_key()
+              }
+)
 # For more on ecmwfr datasets: ecmwfr::wf_dataset_info(), ecmwfr::wf_datasets()
 
 ecmwf_spi_spei_req_year <- function(y) {
