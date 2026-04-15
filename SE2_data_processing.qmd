@@ -61,7 +61,9 @@ This can be achieved using the reproducibility wrapper (`run_reproducibility.R`)
 ```{r}
 #| label: "common"
 #| include: FALSE
-source("_common.R") # Knitr hook to enable global R-env when rendering many .qmd
+if(!interactive()) {
+  source("_common.R") # Knitr hook to enable global R-env when rendering many .qmd
+}
 ```
 
 # SPI & SPEI data processing
@@ -146,7 +148,6 @@ data.table::setnames(station_spi_spei_ts, "variable", "dr_ind")
 ```
 
 ```{r QC-SPI-SPEI}
-hist(station_spi_spei_ts$value)
 # Eliminate clear error values of SPI & SPEI timeseries
 station_spi_spei_ts <- station_spi_spei_ts[value > -1000]
 hist(station_spi_spei_ts$value)
@@ -219,7 +220,6 @@ if (fs::file_exists(pipe_sgi_path)) {
 rm(pipe_sgi_path)
 
 SEI::plot_sei(xts::as.xts(pipe_sgi_long[paikka_id == 9524,.(time=as.POSIXlt(time),sgi)]))
-
 ```
 
 ```{r SGI-station-timeseries}
