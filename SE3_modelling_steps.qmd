@@ -1,0 +1,90 @@
+---
+title: "Standard Element 3"
+subtitle: "Model training, validation, and interpretation"
+author: "Pietari Pöykkö"
+date: last-modified
+format: html
+---
+
+This submission includes:
+
+Python or R code for training a statitical model
+Python or R code to extract relevant information from model output
+Python or R code to calculate model fit coefficients.
+README is edited detailing workflow of model train code, including locations of inputs and outputs in your project directory.
+Note: having a plan for your figures will make your life easier for deciding what relevant information you need to plan for model output!
+
+Be sure to edit your Data and methods document with any updates from this stage of analysis, and get started writing your results and discussion!
+
+Reference for best practices for model development: https://journals.ametsoc.org/view/journals/aies/2/2/AIES-D-22-0065.1.xml 
+
+```{r}
+#| label: "common"
+#| include: FALSE
+if(!interactive()) {
+  source("_common.R") # Knitr hook to enable global R-env when rendering many .qmd
+}
+```
+
+```{r drought-index-correlation}
+# Function to re-format cor.test output into 1-long lists (output will stay as 1 row when applying in dt)
+dt_cor.test <- function(...) {
+  res_list <- as.list(stats::cor.test(...))
+  res_list[["conf.int.l"]] <- res_list[["conf.int"]][[1]]
+  res_list[["conf.int.u"]] <- res_list[["conf.int"]][[2]]
+  res_list[["conf.int"]] <- NULL;  stopifnot(lapply(res_list, length) == 1L)
+  return(res_list)
+}
+pipe_correlations <- pipe_sgi_w_dr_inds[, dt_cor.test(sgi, value, method="pear"), by=list(paikka_id, dr_ind)]
+
+# Plots
+pipe_correlations |> 
+  dplyr::mutate(dr_ind = factor(dr_ind, levels = gtools::mixedsort(unique(dr_ind)))) |> 
+  ggplot(aes(dr_ind, estimate, color=dr_ind)) +
+      geom_violin() +
+      ggforce::geom_sina(aes(alpha=p.value <= 0.01, group=dr_ind)) +
+      stat_summary(fun.data = "mean_se", color="black")
+      # geom_point(aes(alpha=p.value <= 0.01))
+
+
+station_sgi_w_dr_inds <- merge(station_sgi_long, station_spi_spei_ts, by=c("station_id","time"))
+station_correlations <- station_sgi_w_dr_inds[, dt_cor.test(sgi, value, method="pear"), by=list(station_id, dr_ind)]
+station_correlations |> 
+  dplyr::mutate(dr_ind = factor(dr_ind, levels = gtools::mixedsort(unique(dr_ind)))) |> 
+  ggplot(aes(dr_ind, estimate, color=dr_ind)) +
+      geom_violin() +
+      ggforce::geom_sina(aes(alpha=p.value <= 0.01, group=dr_ind)) +
+      stat_summary(fun.data = "mean_se", color="black")
+      # geom_point(aes(alpha=p.value <= 0.01))
+
+
+acf(pipe_sgi_long[paikka_id == 10550, sgi], na.action = na.pass)
+acf(pipe_sgi_long[paikka_id == 10550, sgi], na.action = na.exclude)
+
+ccf_test_spei <- station_spi_spei_ts[station_id == pipes[paikka_id == 10550, asema_tunnus] &
+  variable == "SPEI12"
+]
+ccf_test_pipe <- pipe_sgi_long[paikka_id == 10550]
+ccf_test <- merge(ccf_test_spei, ccf_test_pipe, by="dr_ind")
+
+ccf(ccf_test$sgi, ccf_test$value, na.action = na.pass)
+stats::cor.test(ccf_test$sgi, ccf_test$value,  method="pearson")
+
+plot(ccf_test$sgi, ccf_test$value)
+
+```
+
+```{r}
+
+DescTools::RMSE()
+```
+
+
+
+Test out buffering around pipes
+```{r}
+BUFF_M <- 200
+areas_around_pipes <- pipes[paikka_id %in% G$paikka_id][,.(lon_min=lon-BUFF_M, lon_max=lon+BUFF_M,lat_min=lat-BUFF_M, lat_max=lat+BUFF_M), by=paikka_id]
+```
+
+
