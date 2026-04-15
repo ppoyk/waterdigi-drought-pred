@@ -169,6 +169,10 @@ if (!rlang::is_empty(needed_ecmwf_reqs)) {
 rm(wanted_req_files, existing_req_files, needed_ecmwf_reqs, all_ecmwf_reqs, out_dir_dls)
 ```
 
+```{r finish}
+message("Finished")
+```
+
 Download FMI's daily gridded data from around all pipes where natural QC'd GW data exists.
 Data DOI reference: https://doi.org/10.35614/ISSN-2341-6408-IK-2022-11-RL
 AWS S3 link assumed to be stable enough
