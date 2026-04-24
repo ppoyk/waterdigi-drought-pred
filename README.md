@@ -7,7 +7,6 @@ format:
 ---
 
 # Drought index assessment for groundwater drought prediction
-
 **Author:** Pietari Pöykkö\
 **Contact:**\
 **Organization:** University of Oulu\
@@ -143,7 +142,7 @@ GW must most likely be aggregated to monthly values due to gaps and sparse measu
 +--------------------------+--------------------------------------------------------------------------------------------------------------+
 | `inputs/manual/`         | Input data requiring a manual download. Contents not committed to repository.                                |
 +--------------------------+--------------------------------------------------------------------------------------------------------------+
-| `inputs/auto/`           | Stores automatically accessed datasets of `inputs/auto_datalinks.txt`. Contents not committed to repository. |
+| `inputs/auto/`           | Stores automatically downloaded datasets. Contents not committed to repository.                              |
 +--------------------------+--------------------------------------------------------------------------------------------------------------+
 | `processed_data/`        | analysis-ready datasets                                                                                      |
 +--------------------------+--------------------------------------------------------------------------------------------------------------+
@@ -151,20 +150,19 @@ GW must most likely be aggregated to monthly values due to gaps and sparse measu
 +--------------------------+--------------------------------------------------------------------------------------------------------------+
 | `figures/`               | Figures, tables, graphs, and data-derivatives (e.g. summary statistics) displayed in manuscript text         |
 +--------------------------+--------------------------------------------------------------------------------------------------------------+
-| `run_reproducibility.py` | Reproducibility wrapper                                                                                      |
-+--------------------------+--------------------------------------------------------------------------------------------------------------+
-| `Dockerfile`             | Reproducible container                                                                                       |
+| `run_reproducibility.R`  | Reproducibility wrapper                                                                                      |
 +--------------------------+--------------------------------------------------------------------------------------------------------------+
 | `CITATION.cff`           | Citation metadata, sourced directly from Zenodo                                                              |
 +--------------------------+--------------------------------------------------------------------------------------------------------------+
 
 ## How to Reproduce
 
-Download all datasets with "Download" access in the above table. Place them directly into `inputs/manual/`.\
-Run the `run_reproducibility.py`.
+0. Install the R language v.4.5.3.
+1. Install the Positron IDE, which will come bundled with Quarto. Alternatively install Quarto CLI.
+2. Download all datasets with "Download" access in the above table. Place them directly into `inputs/manual/`.\
+3. Run the file `run_reproducibility.R`.
 
 ### Computational requirements
-
 The code has been tested on:
 
 -   Windows operating system
@@ -173,29 +171,22 @@ The code has been tested on:
     Any sufficiently modern computer should manage to run the code. Linux or MacOS systems should also be compatable.
 
 ### Data access configurations
-
 No special tokens to change.
 
-### Run the code
-
-``` bash
-pip install -r requirements.txt
-python run_reproducibility.py
-```
 
 ## Results
-
 Display key figures in `/figures` folder, with description: ![Example](figures/example.png)
 
-## How to cite
+The code also produces intermediary files suitable for further analysis into the folder `analysis-ready`.
+These are produced by and documented in `SE2_data_processing.qmd`
 
+## How to cite
 Pöykkö, P., 2026. Drought index assessment for groundwater drought prediction. \[software\] https://doi.org/XXXXXXXXX\
 DOI: **DOI_PENDING**
 
 ## License
 
 ## Contribution Guidelines
-
 Contributions that improve the quality, clarity, and reproducibility of this project are welcome.
 
 -   Open an issue before making major or result-affecting changes.
@@ -206,10 +197,10 @@ Contributions that improve the quality, clarity, and reproducibility of this pro
 -   Do not commit large or restricted datasets; respect data licenses. By contributing, you agree that your work will be released under the project’s license.
 
 ## References
-
 -   Gao, Y., Markkanen, T., Thum, T., Aurela, M., Lohila, A., Mammarella, I., Kämäräinen, M., Hagemann, S., Aalto, T., 2016. Assessing various drought indicators in representing summer drought in boreal forests in Finland. Hydrol. Earth Syst. Sci. 20, 175–191. https://doi.org/10.5194/hess-20-175-2016
 -   Lai, T.-Y., Salminen, J., Jäppinen, J.-P., Koljonen, S., Mononen, L., Nieminen, E., Vihervaara, P., Oinonen, S., 2018. Bridging the gap between ecosystem service indicators and ecosystem accounting in Finland. Ecological Modelling 377, 51–65. https://doi.org/10.1016/j.ecolmodel.2018.03.006
 -   Karlsson, I.B., Sonnenborg, T.O., Jensen, K.H., Refsgaard, J.C., 2014. Historical trends in precipitation and stream discharge at the Skjern River catchment, Denmark. Hydrology and Earth System Sciences 18, 595–610. https://doi.org/10.5194/hess-18-595-2014
 -   Pöykkö et al., 2026. TBD.
 -   Schneider, R., Stisen, S., Hansen, M.F.T., Andreasen, M., Nilsson, B., Hinsby, K., Henriksen, H.J., Seidenfaden, I.K., 2025. Drought dynamics across the hydrological cycle – an extensive validation of the National Hydrological Model of Denmark. EGUsphere 1–53. https://doi.org/10.5194/egusphere-2025-5373
 -   Teutschbein, C., Grabs, T., Giese, M., Todorović, A., Barthel, R., 2025. Drought propagation in high-latitude catchments: insights from a 60-year analysis using standardized indices. Natural Hazards and Earth System Sciences 25, 2541–2564. https://doi.org/10.5194/nhess-25-2541-2025
+
