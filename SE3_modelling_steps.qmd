@@ -26,59 +26,214 @@ if(!interactive()) {
 }
 ```
 
+```{r create-lagged-indices}
+lags <- -6:12 # Range of lags to examine (months)
+lag_cols <- paste0("value_lag_",lags) # Col names for lagged values
+
+# Order by time before shifting (grouped by station_id/paikka_id and drought index)
+setorder(station_sgi_w_dr_inds, station_id, dr_ind, time)
+setorder(pipe_sgi_w_dr_inds, paikka_id, dr_ind, time)
+
+#  Create the multiple shifted columns
+temp_st_wide_lag_inds <- data.table::copy(station_sgi_w_dr_inds) # do not modif orig
+temp_st_wide_lag_inds[, (lag_cols) := shift(value, lags), by=list(station_id, dr_ind)]
+
+temp_p_wide_lag_inds <- data.table::copy(pipe_sgi_w_dr_inds) # do not modif orig
+temp_p_wide_lag_inds[, (lag_cols) := shift(value, lags), by=list(station_id, dr_ind)]
+
+# Shifted cols into long format. Kept cols are in `id.vars`
+station_lag_inds <- melt(temp_st_wide_lag_inds,
+  id.vars = c("station_id", "time", "dr_ind","ind_type","ind_accum", "value", "sgi"), 
+  measure.vars = lag_cols,
+  variable.name = "lag_months", value.name = "lagged_value"
+)
+pipe_lag_inds <- melt(temp_p_wide_lag_inds,
+  id.vars = c("paikka_id","station_id", "time", "dr_ind","ind_type","ind_accum", "value", "sgi"), 
+  measure.vars = lag_cols,
+  variable.name = "lag_months", value.name = "lagged_value"
+)
+rm(temp_st_wide_lag_inds, temp_p_wide_lag_inds) # Cleanup temp vars
+# Convert `lag_months` to contain only the numeric lag amount
+station_lag_inds[, lag_months := as.integer(gsub("value_lag_", "", lag_months))]
+pipe_lag_inds[,    lag_months := as.integer(gsub("value_lag_", "", lag_months))]
+
+```
+
 ```{r drought-index-correlation}
 # Function to re-format cor.test output into 1-long lists (output will stay as 1 row when applying in dt)
 dt_cor.test <- function(...) {
   res_list <- as.list(stats::cor.test(...))
-  res_list[["conf.int.l"]] <- res_list[["conf.int"]][[1]]
-  res_list[["conf.int.u"]] <- res_list[["conf.int"]][[2]]
+  res_list[["conf.int.lo"]] <- res_list[["conf.int"]][[1]]
+  res_list[["conf.int.hi"]] <- res_list[["conf.int"]][[2]]
   res_list[["conf.int"]] <- NULL;  stopifnot(lapply(res_list, length) == 1L)
   return(res_list)
 }
-pipe_correlations <- pipe_sgi_w_dr_inds[, dt_cor.test(sgi, value, method="pear"), by=list(paikka_id, dr_ind)]
+# Calculate correlations on pipe and station level
+pipe_cor <- pipe_lag_inds[, dt_cor.test(sgi, lagged_value, method="pear"),
+                                by=list(paikka_id,station_id, dr_ind,ind_type,ind_accum, lag_months)]
+station_cor <- station_lag_inds[, dt_cor.test(sgi, lagged_value, method="pear"),
+                                by=list(station_id, dr_ind,ind_type,ind_accum, lag_months)]
 
-# Plots
-pipe_correlations |> 
-  dplyr::mutate(dr_ind = factor(dr_ind, levels = gtools::mixedsort(unique(dr_ind)))) |> 
-  ggplot(aes(dr_ind, estimate, color=dr_ind)) +
+# SGI-droughtindex correlation plots
+pipe_cor |> 
+  ggplot(aes(ind_type, estimate)) +
+      geom_violin() +
+      ggforce::geom_sina(aes(alpha=p.value <= 0.01, group=dr_ind), show.legend=F) +
+      facet_grid(rows=vars(ind_accum), cols=vars(lag_months), scales="free_x") +
+      stat_summary(fun.data = "mean_se", color="red")
+station_cor |> 
+  ggplot(aes(ind_type, estimate, group=interaction(ind_type,ind_accum))) +
       geom_violin() +
       ggforce::geom_sina(aes(alpha=p.value <= 0.01, group=dr_ind)) +
-      stat_summary(fun.data = "mean_se", color="black")
+      facet_grid(cols = vars(ind_accum), scales="free_x") +
+      stat_summary(fun.data = "mean_se", color="red")
       # geom_point(aes(alpha=p.value <= 0.01))
 
 
-station_sgi_w_dr_inds <- merge(station_sgi_long, station_spi_spei_ts, by=c("station_id","time"))
-station_correlations <- station_sgi_w_dr_inds[, dt_cor.test(sgi, value, method="pear"), by=list(station_id, dr_ind)]
-station_correlations |> 
-  dplyr::mutate(dr_ind = factor(dr_ind, levels = gtools::mixedsort(unique(dr_ind)))) |> 
-  ggplot(aes(dr_ind, estimate, color=dr_ind)) +
-      geom_violin() +
-      ggforce::geom_sina(aes(alpha=p.value <= 0.01, group=dr_ind)) +
-      stat_summary(fun.data = "mean_se", color="black")
-      # geom_point(aes(alpha=p.value <= 0.01))
+# Summarize all stations: what lag + accum combo is the best for each station & index
+station_cor_smry <- station_cor[, .SD[which.max(estimate)],
+                                    by=list(ind_type, station_id)]
+station_cor_smry[,stopifnot(!anyDuplicated(station_id)), by=ind_type] # validate
+# Summarize all pipes
+pipe_cor_smry <- pipe_cor[, .SD[which.max(estimate)],
+                                    by=list(ind_type, paikka_id,station_id)]
+pipe_cor_smry[,stopifnot(!anyDuplicated(paikka_id)), by=ind_type] # validate
+
+# Plot the correlations heatmap of 1 station
+ggplot(station_cor[station_id=="0101"],
+    aes(lag_months, factor(ind_accum), fill=estimate)) +
+  geom_tile() +
+  geom_vline(xintercept=0, color="black") + 
+  geom_point(data=station_cor_smry[station_id=="0101"], color="white", size=3, pch="cross", stroke=1) +
+  facet_grid(rows=vars(ind_type), cols=vars(station_id)) +
+  scico::scale_fill_scico("Correlation", palette="vik", midpoint=0) +
+  coord_cartesian(expand=F)
+# and pipes of 1 stations
+ggplot(pipe_cor[station_id=="0902"],
+    aes(lag_months, factor(ind_accum), fill=estimate)) +
+  geom_tile() +
+  geom_vline(xintercept=0, color="black") + 
+  stat_summary(data=pipe_cor_smry[station_id=="0902"], fun=max, color="white") +
+  facet_grid(rows=vars(ind_type), cols=vars(paikka_id)) +
+  scico::scale_fill_scico("Correlation", palette="vik", midpoint=0) +
+  coord_cartesian(expand=F)
+
+# Plot summary of all stations
+dplyr::group_by(station_cor_smry, ind_type) |> 
+  dplyr::count(lag_months, ind_accum) |> 
+    ggplot(aes(lag_months, ind_accum)) +
+    geom_tile(aes(fill=n)) + 
+    scale_fill_viridis_c("Stations", transform="sqrt") +
+    geom_label(aes(label=n), alpha=0.5) +
+    facet_grid(rows=vars(ind_type)) +
+    scale_x_continuous(breaks=~round(unique(pretty(.)))) +
+    theme_bw()
+# Compare also which index is better overall (plot best correlations for all indices)
+ggplot(station_cor_smry, aes(ind_type, estimate)) + 
+  geom_violin(draw_quantiles = c(0.5), lwd=0.8) + ggforce::geom_sina(alpha=0.2) + theme_minimal()
+
+# Plot summary of all pipes
+dplyr::group_by(pipe_cor_smry, ind_type) |> 
+  dplyr::count(lag_months, ind_accum) |> 
+    ggplot(aes(lag_months, ind_accum)) +
+    geom_tile(aes(fill=n)) + 
+    scale_fill_viridis_c("Pipes", transform="sqrt") +
+    geom_label(aes(label=n), alpha=0.5) +
+    facet_grid(rows=vars(ind_type)) +
+    scale_x_continuous(breaks=~round(unique(pretty(.)))) +
+    theme_bw()
+ggplot(pipe_cor_smry, aes(ind_type, estimate)) + 
+  geom_violin(draw_quantiles=c(0.5), lwd=0.8) + ggforce::geom_sina(alpha=0.2) + theme_minimal()
+# For some reasons these options give confusing results...
+# heatmap(table(station_cor_smry[,.(lag_months,ind_accum)]))
+# plot(table(station_cor_smry[,.(lag_months,ind_accum)]))
+# Alt to `table`: xtabs(~ lag_months + ind_accum, data = station_cor_smry)
+```
+
+```{r drought-index-RMSE}
+pipe_rmse <- pipe_lag_inds[, .(RMSE=DescTools::RMSE(lagged_value, sgi, na.rm=T)), # SGI is ref
+    by=list(paikka_id,station_id, dr_ind,ind_type,ind_accum, lag_months)]
+# Plot RMSEs of all combinations
+pipe_rmse |> 
+  ggplot(aes(ind_type, RMSE, group=interaction(ind_type,ind_accum))) +
+    geom_violin() +
+    ggforce::geom_sina(aes(group=dr_ind)) +
+    facet_grid(cols = vars(ind_accum), scales="free_x") +
+    stat_summary(fun.data = "mean_se", color="red")
 
 
+# Summarize RMSE of pipes (which lag + accum combo gives lowest value, for each pipe and index)
+pipe_rmse_smry <- pipe_rmse[, .SD[which.min(RMSE)],
+                                    by=list(ind_type, paikka_id)]# Plot RMSE development on 1 station
+
+ggplot(pipe_rmse[station_id=="0902"],
+    aes(lag_months, factor(ind_accum), fill=RMSE)) +
+  geom_tile() +
+  geom_vline(xintercept=0, color="black") + 
+  geom_point(data=pipe_rmse_smry[station_id=="0902"], color="white", size=3, pch="cross", stroke=1) +
+  facet_grid(rows=vars(ind_type), cols=vars(paikka_id)) +
+  scico::scale_fill_scico("RMSE", palette="batlow") +
+  coord_cartesian(expand=F)
+
+# Plot summary of the best RMSEs of pipes
+dplyr::group_by(pipe_rmse_smry, ind_type) |> 
+  dplyr::count(lag_months, ind_accum) |> 
+    ggplot(aes(lag_months, ind_accum)) +
+    geom_tile(aes(fill=n)) + 
+    scale_fill_viridis_c("Pipes", transform="sqrt") +
+    geom_label(aes(label=n), alpha=0.5) +
+    facet_grid(rows=vars(ind_type)) +
+    scale_x_continuous(breaks=~round(unique(pretty(.)))) +
+    theme_bw()
+```
+
+```{r, join-further-lags}
+# Take the best correlation accum + lag values, and join to them more lagged values
+# Compare the differences. How much would we lose correlation if using larger lag?
+pipe_cor_smry[pipe_cor[lag_months==0]]
+
+pipe_cor_smry[ind_accum==24]
+
+SEI::plot_sei(station_spi_spei_ts[station_id == "0302" & dr_ind == "SPEI24"]$value)
+station_lag_inds[,unique(station_id)]
+```
+
+
+# Auto- and cross-correlations
+Look into how the SGI is autocorrelated, and how the SGI cross-correlates with other indices.
+```{r explore-acf-ccf}
 acf(pipe_sgi_long[paikka_id == 10550, sgi], na.action = na.pass)
-acf(pipe_sgi_long[paikka_id == 10550, sgi], na.action = na.exclude)
+pipe_sgi_long[paikka_id %in% unique(paikka_id)[1:3]][, print(acf(sgi, na.action = na.pass)), by=paikka_id]
 
 ccf_test_spei <- station_spi_spei_ts[station_id == pipes[paikka_id == 10550, asema_tunnus] &
-  variable == "SPEI12"
+  dr_ind == "SPEI12"
 ]
 ccf_test_pipe <- pipe_sgi_long[paikka_id == 10550]
-ccf_test <- merge(ccf_test_spei, ccf_test_pipe, by="dr_ind")
+ccf_test <- merge(ccf_test_spei, ccf_test_pipe, by="time")
 
-ccf(ccf_test$sgi, ccf_test$value, na.action = na.pass)
+ccf(ccf_test$sgi, ccf_test$value, na.action = na.pass, lag.max=36)
 stats::cor.test(ccf_test$sgi, ccf_test$value,  method="pearson")
 
 plot(ccf_test$sgi, ccf_test$value)
-
 ```
 
-```{r}
+# TODO
+ - How much does the correlation worsen when looking further into the future?
+ - calculate mean unsaturated zone thickness, look at the results based on that
+ - investigate if there is a spatial pattern to the differing responses to optimal lag+accumulation combination
+ - investigate how the absolute GW level fluctuation amplitude is tied to the SGI response
+ - use ImeytymisKerroin of GWAs of stations to look at the results?
+ - investigate the ranges at which the SGI ACF decays (m_max) and how that impacts the results
+    - look at how the ACF is tied to the optimal (highest SGI cor.) P accumulation of the sites
+ - calculate max & median drought durations from both SGI and the indices.
+    - look at how they are cross-correlated
+    - look at which of them show comparatively more drought periods over the whole data
+    - look at how they are tied to the ACF decay, and to the unsat.zone thickness
+ - calculate correlations of SGI and dr-indices only with <0 values. (seems to have worse corr.)
+    - also look at whether the unsat.zone thickness explains a site's discrepency between >0 and <0 correlations
 
-DescTools::RMSE()
-```
-
+Miten eri indeksien mukaan Suomessa on ollut kuivuutta? Myös alueellinen tarkastelu.
+Kysy Laurilta.
 
 
 Test out buffering around pipes
