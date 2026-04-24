@@ -45,13 +45,13 @@ Both datasets are contained within Finland, and cover the most of Finland
 ## Modelling framework:
 The modelling is done entirely using the freely available R-language (v.4.5.0).
 The reproducibility of this workflow is ensured with the `renv` package.
-Libraries should be handled automatically, and all required are listed in `renv.lock`
+Libraries should be handled automatically, and all required are listed in `renv.lock`. See `?renv::restore()` for help if needed.
 
 ## Data processing steps:
 (Describe operations required to convert raw data to analysis ready data using [plain language](https://www.gov.uk/government/publications/geospatial-glossary/geospatial-glossary))
 
 SPI & SPEI index values are read from the .nc files. (Point-like time series for all stations)
-Erroneys (< -1000) SPI & SPEI index values are removed. No ohter outliers.
+Erroneous (< -1000) SPI & SPEI index values are removed. No other outliers.
 
 The original GW data is aggregated into montly time series for all pipes.
 From these, SGI timeseries are calculated for all pipes.
@@ -62,8 +62,7 @@ SGI series are then correlated with SPI & SPEI time series.
 
 ## How to use this notebook:
 This notebook can be run with Quarto installed. The easiest way to achieve this is to use the Positron IDE.
-The notebook SE1_data_access.qmd should be run in the same env/session than this. Variables defined/loaded there are used here.
-This can be achieved using the reproducibility wrapper (`run_reproducibility.R`)
+The primary way is to use the reproducibility wrapper (`run_reproducibility.R`), which runs these interdependent notebooks in the correct order.
 
 ```{r}
 #| label: "common"
@@ -158,6 +157,9 @@ data.table::setnames(station_spi_spei_ts, "variable", "dr_ind")
 # Eliminate clear error values of SPI & SPEI timeseries
 station_spi_spei_ts <- station_spi_spei_ts[value > -1000]
 hist(station_spi_spei_ts$value)
+# What stations have the largest amount of extreme values?
+station_spi_spei_ts[,sum(abs(value) > 4), by=list(station_id,dr_ind)][order(V1)]
+
 ```
 
 ```{r test-SGI-ts}
@@ -245,5 +247,22 @@ pipe_sgi_w_dr_inds <- merge(pipe_sgi_long, station_spi_spei_ts,
                             by=c("station_id","time"), allow.cartesian = T)
 station_sgi_w_dr_inds <- merge(station_sgi_long, station_spi_spei_ts,
                             by=c("station_id","time"), allow.cartesian = T)
+
+# Add separate cols for the index type and the accumulation period. Sort ind factors
+pipe_sgi_w_dr_inds <- pipe_sgi_w_dr_inds |> tidyr::extract(dr_ind, 
+          into = c("ind_type", "ind_accum"), remove=F,
+          regex = "([A-Z]+)([0-9]+)", convert=T) |> # number col numeric
+  dplyr::mutate(dr_ind = factor(dr_ind, levels=gtools::mixedsort(unique(dr_ind)),ordered=T),
+                ind_accum = factor(ind_accum, levels=gtools::mixedsort(unique(ind_accum)),ordered=T)) |> 
+  as.data.table()
+station_sgi_w_dr_inds <- station_sgi_w_dr_inds |> tidyr::extract(dr_ind, 
+          into = c("ind_type", "ind_accum"), remove=F,
+          regex = "([A-Z]+)([0-9]+)", convert=T) |> # number col numeric
+  dplyr::mutate(dr_ind = factor(dr_ind, levels=gtools::mixedsort(unique(dr_ind)), ordered=T),
+                ind_accum = factor(ind_accum, levels=gtools::mixedsort(unique(ind_accum)), ordered=T)) |> 
+      as.data.table()
 ```
 
+```{r finish}
+message("Finished")
+```

@@ -48,9 +48,7 @@ if ((ps::ps_disk_usage()$available / 2^30) < 2) { # Gb
 ```{r}
 #| label: "common"
 #| include: FALSE
-if(!interactive()) {
-  source("_common.R") # Knitr hook to enable global R-env when rendering many .qmd
-}
+source("_common.R") # Knitr hook to enable global R-env when rendering many .qmd
 ```
 
 ```{r init}
