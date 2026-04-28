@@ -3,8 +3,8 @@ title: "Standard Element 4"
 subtitle: "Result visualization"
 author:
   - name:
-     given: "Pietari"
-     family: "Pöykkö"
+      given: "Pietari"
+      family: "Pöykkö"
     degrees: "MSc (tech)"
     orcid: "0009-0000-1214-5336"
     corresponding: true
@@ -32,9 +32,10 @@ keywords:
   - drought prediction
 date: last-modified
 number-sections: true
-fig-format: svg
 format:
   html:
+    fig-format: svg       # vector plots
+    lightbox: true        # can click on pictures
     page-layout: article  # enable margins etc.
     embed-resources: true # standalone html file
     code-fold: true       # fold all code initially
@@ -45,17 +46,23 @@ format:
 ```{r}
 #| label: "common"
 #| include: FALSE
-if(!interactive()) {
-  source("_common.R") # Knitr hook to enable global R-env when rendering many .qmd
+# Final notebook, only loading of env required.
+# Saves time to not save the image again, which will not be needed by README
+if (file.exists(here::here("environment.RData"))) {
+  load(here::here("environment.RData"))
 }
+library("here"); library("data.table"); library("ggplot2")
+dir_figs <- fs::dir_create("figures") # folder to save figures
 ```
 ```{r}
 #| label: "chunk-ops"
 #| include: FALSE
+fig_width <- 4.5
+fig_height <- fig_width * 0.618
 knitr::opts_chunk$set(
     out.width = "100%",
-    fig.width = 4.5,     # reasonable size
-    fig.asp = 0.618,   # golden ratio
+    fig.width = fig_width, # reasonable size
+    fig.asp = 0.618,       # golden ratio
     fig.align = "center"
 )
 ```
@@ -74,13 +81,17 @@ The package `SEI` is also used for convenience for plotting ribbon time series o
 There are no custom visualization functions etc. Everything is done through the declarative syntax of plotting libraries.
 
 The final figures have not been altered or adjusted outside of this code.
-The figures were not saved into files outside of this document. Although easily accomplished, this was omitted to keep the code compact.
+Only the figures needed in README were saved as files outside of this document. Although easily accomplished, most were not saved to keep the code compact.
 
+::: {.callout-important}
+[comment]: # (no need to label (#imp-previous), as not cross-referenced)
 Details on the data downloads and processing can be found in the previous notebooks (SE 1-3).
+:::
 
 A technical workaround (`_common.R`) was used to get multiple consequtive Quarto documents to share one R environment.
 This could have been avoided by saving intermediary data processing products on disk in tabular format.
-However, the approach taken brings some convenience. All object classes, factor levels and their order etc. are now preserved. Saving objects as `csv`s would require writing wrapper functions for file-reading to ensure consistent object attributes/metadata. These intermediary data files need to only be valid for the duration of the project rendering, so "universal" storage is not necessary. Some heavy object calculation results were saved also on disk for more rapid code development. By the end of making this document I learned that perhaps this is not ideal, as loading and saving the environment every time you want to render the file gets quite slow. And getting a notebook render to visually look just the way you like it *takes A LOT of tweaking*!!! The rendering time could be reduced if only the absolute necessary objects were loaded from their specific files.
+However, the approach taken brings some convenience. All object classes, factor levels and their order etc. are now preserved. Saving objects as `csv`s would require writing wrapper functions for file-reading to ensure consistent object attributes/metadata. These intermediary data files need to only be valid for the duration of the project rendering, so "universal" storage is not necessary. Some heavy object calculation results were saved also on disk for more rapid code development.  
+By the end of making this document I learned that perhaps this is not ideal, as loading and saving the environment every time you want to render a file gets quite slow. And getting a notebook render to visually look just the way you like it *takes A LOT of tweaking*!!! The rendering time could be reduced if only the absolute necessary objects were loaded from their specific files.
 
 
 # Discovering the issues
@@ -90,13 +101,16 @@ I encountered some serious limitations in the usability of my selected drought i
 For my initial quality control I simply dropped some extreme (< -1000) values I observed. Afterwards the data looked reasonable (@fig-index-hist).
 ```{r}
 #| label: fig-index-hist
-#| fig-cap: "Total value distributions of the SPI and SPEI drought indices, grouped by accumulation period. "
-#| fig-asp: 0.8
-#| out-width: 70%
-ggplot(station_sgi_w_dr_inds) + geom_histogram(aes(value), bins=30) +
+#| fig-cap: "Total value distributions of the SPI and SPEI drought indices, grouped by accumulation period."
+#| out-width: 80%
+ggsave("spi_spei_hists.svg", path=dir_figs, width=fig_width, height=fig_width*0.8, plot=
+  ggplot(station_sgi_w_dr_inds) + geom_histogram(aes(value), bins=30) +
   # stat_function(fun = function(x) dnorm(x, mean=0, sd=1) * 10000) +
   facet_grid(cols=vars(ind_type), rows=vars(ind_accum)) + labs(y=NULL, x=NULL) + theme_bw()
+)
 ```
+![Total value distributions of the SPI and SPEI drought indices, grouped by accumulation period.](figures/spi_spei_hists.svg){#fig-index-hist}
+
 
 The drought indices (SPI, SPEI) have been obtained from an ERA5-based global time series of ready-made drought indices. (Links in README.)
 Each studied groundwater station was approximately located within one raster cell (~28x28 km) of the drought index dataset.
@@ -116,13 +130,14 @@ A station with bad data (0902) in [@fig-bad-rmse-1; @fig-bad-rmse-2], and a stat
 #|   - "The correlations of the same station. The bad SPEI-6 fit is less visible, but still noticeable. (SPEI-6 too blue)"
 #|   - "A station with RMSE appearing normal."
 ## #| layout: [[1],[1],[1]]  ## [[47,-5,47], [70]]
-ggplot(pipe_rmse[station_id=="0902"],
+plt1 <- ggplot(pipe_rmse[station_id=="0902"],
     aes(lag_months, factor(ind_accum), fill=RMSE)) +
   geom_tile() + geom_vline(xintercept=0, color="black") + 
   geom_point(data=pipe_rmse_smry[station_id=="0902"], color="white", size=3, pch="cross", stroke=1) +
   facet_grid(rows=vars(ind_type), cols=vars(paikka_id)) +
   scico::scale_fill_scico("RMSE", palette="bilbao") +
   coord_cartesian(expand=F) + labs(x="Lag (months)", y="Accumulation period")
+print(plt1); ggsave("bad-rmse-station.png", path=dir_figs, plot=plt1, width=fig_width, height=fig_height) # Show and save
 ggplot(pipe_cor[station_id=="0902"],
     aes(lag_months, factor(ind_accum), fill=estimate)) +
   geom_tile() + geom_vline(xintercept=0, color="black") + 
@@ -151,7 +166,8 @@ The bad SPEI-6 time series has almost periodic extreme negative values, with occ
 #|   - "Station 0902, SPEI-6"
 #|   - "Station 0902, SPEI-12"
 prob_station <- "0902"
-SEI::plot_sei(station_spi_spei_ts[station_id == prob_station & dr_ind == "SPEI6"]$value)
+plt2 <- SEI::plot_sei(station_spi_spei_ts[station_id == prob_station & dr_ind == "SPEI6"]$value)
+print(plt2); ggsave("bad-station-ts.png", path=dir_figs, plot=plt2, width=fig_width, height=fig_height) # Show and save
 SEI::plot_sei(station_spi_spei_ts[station_id == prob_station & dr_ind == "SPEI12"]$value)
 ```
 
@@ -199,6 +215,38 @@ For my next publication, I was intending to use this dataset, as well as a natio
 **Would using this ERA5-based dataset in a paper be acceptable, if I at the same time point out all its shortcomings/errors?**
 
 
+For this particular station's SPEI-6, the issue seems to only be present in February (@fig-prob-station-monthly).
+Almost no datapoint is reasonable for that month throughout the whole 1965-2025 period.
+```{r}
+#| label: fig-prob-station-monthly
+#| fig-cap: "The data distributions of SPEI-6 values of station 0902 for all calendar months througout the data period of 1965-2025. The density estimates are scaled to have equal maximum width."
+#| out-width: 70%   # overall smaller
+station_spi_spei_ts[station_id == prob_station & dr_ind == "SPEI6"] |>
+  ggplot(aes(factor(month(time)), value)) + geom_violin(scale="width") + labs(x="Month",y="SPEI-6") + theme_classic()
+```
+
+Problems with excess amounts of extreme negative SPEI-6 values occur nevertheless in all months, when looking at the whole coverage of Finland (@fig-spei6-all-data).
+The same issue is most likely present also in the rest of the drought index variations.
+```{r}
+#| label: fig-spei6-all-data
+#| fig-cap: "The data distributions of SPEI-6 over whole of Finland for the full period of 1965-2025. The distributions are shown for each calendar month. The portion of data below index value of -8 is shown as a subset on the left."
+#| fig-asp: 0.45   # wider aspect beneficial
+#| fig-width: 7    # smaller scale
+#| out-width: 150% # wider output
+spei6_rast <- terra::rast(file_meta[variable == "SPEI6"][order(time_str)]$filepath)
+spei6_all_val <- terra::values(spei6_rast)
+colnames(spei6_all_val) <- as.character(as.Date(terra::time(spei6_rast)))
+spei6_val_long <- tidyr::pivot_longer(as.data.frame(spei6_all_val),
+                    cols=tidyr::everything(), cols_vary="slowest",
+                    names_to="time")
+ggplot(na.omit(spei6_val_long), aes(factor(month(as.Date(time))), value)) +
+  geom_violin(width=1.6, alpha=0.8) +
+  # ggforce::facet_zoom(y= (value > 8.1)) +
+  ggforce::facet_zoom(y= (value < -8)) +
+  labs(x="Month",y="SPEI-6") + theme_bw()
+```
+
+
 ## Spatial view
 When compared to the locations of all stations included in this study (@fig-stations-map), stations with non-normal (Shapiro-Wilk test $\alpha \gt 0.05$) distributions of drought index time series values are very common with shorter accumulation periods, and approximately equally common between SPI and SPEI (@fig-nonnorm-map). There does not seem to be any strong spatial groupings in non-normal stations compared to the locations of all stations (@fig-maps).
 
@@ -225,9 +273,11 @@ dr_ind_ts_normality[p.value > 0.05][station_coords, on="station_id", nomatch=NUL
   geom_sf(aes(geometry=geometry), alpha=0.5) +
   facet_grid(rows=vars(ind_type), cols=vars(ind_accum)) +
   theme_void()
+ggsave("bad-stations-map.png", path=dir_figs, width=fig_width, height=fig_height) # save last plot
 ```
 The locations of stations with non-normal distributions of drought index time series values. The panel columns correspond to index accumulation periods, and the rows correspond to the drought indices.
 :::
+A spatial view comparing likely bad drought index time series to the distribution of the studied stations.
 ::::
 
 # Questions to investigate
