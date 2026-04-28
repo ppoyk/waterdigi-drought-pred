@@ -4,13 +4,15 @@ format:
     html:
         link-external-icon: true
         link-external-newwindow: true
+        fig-format: svg
+        embed-resources: true # standalone html file
 ---
 
 # Drought index assessment for groundwater drought prediction
 **Author:** Pietari Pöykkö\
-**Contact:**\
+**Contact:** pietari.poykko@oulu.fi
 **Organization:** University of Oulu\
-**Website:** TBD
+**Website:** <https://www.oulu.fi/en/researchers/pietari-poykko> (Personal site not yet available)
 
 ## Project Overview
 Groundwater (GW) droughts should be predicted in advance, as such conditions have important
@@ -35,11 +37,16 @@ the accuracy, validity, and lead-time of drought indices to enhance the predicti
 -   Which drought index has the best prediction power on GW drought (in the subarctic Finland)?
 -   How far into the future can the indices predict GW levels?
 -   Does the latitude, soil, or the season affect index performance?
+These questions were still left unanswered due to issues with the selected datasets. Detals below and in `SE4_results_viz`.
+
 
 ## Data Sources
+
 The study area is Finland, with analyzed groundwater data extending from 1970s to 2025.
 
 ### Published Data Sources
+[!NOTE] Only the 1st and 3rd data sources were ultimately used.
+
 <!-- edit with https://www.tablesgenerator.com/text_tables -->
 +---------------+--------------------+---------------------+----------+------------------------------------------------------------------------------------------------------------+-----------------------------------------------+-----------------------------------+
 | Name          | Source             | Description         | Access   | URLs                                                                                                       | Details                                       | Citation                          |
@@ -109,7 +116,6 @@ The study area is Finland, with analyzed groundwater data extending from 1970s t
 
 
 ### Data Access Notes
-
 [Hertta](https://syke.fi/en/environmental-data/maps-and-information-services/open-environmental-information-systems),
 the open data portal of the [Finnish Environment Institute](https://syke.fi/en), requires the creation
 of a free user account. The portal is mostly available in English. There is no one-button solution
@@ -119,76 +125,87 @@ The automated downloads through the European Centre for Medium-Range Weather For
 API requires an API key, obtained via creating a free account.
 The script tries to ask for this automatically 
 
-### Inputs folder
-
-Any direct data download links are found in the `inputs/auto_datalinks.txt` file. This file contains the persistent digital identifier download links for datasets XXXXXX.\
-The `inputs/manual/` folder contains the manually downloaded datasets. These include the datasets in the above table accessed via a download.
 
 ## Methods Summary
-
 The GW source data will be quality controlled prior to analysis. Quality control steps have been outlined in Pöykkö et al. (2026).\
-**Model Framework:** Describe steps involved in data preprocessing\
-GW must most likely be aggregated to monthly values due to gaps and sparse measurement interval. If possible, all GW obs are used, and the higher resolution datasets will be sampled only from those days.\
-**Rest TBD**
+**Model Framework:**
+GW is aggregated to monthly values due to gaps and sparse measurement interval. This also matches the temporal resolution of the drought indices.\
+The GW levels are converted into Standardized Groundwater Index (SGI) for individual pipes. Also, monitoring stations (~10 pipes) are aggregated their own time series for comparison.
+The drought indices available in the above mentioned dataset accumulate the drought conditions in the environment into a standardized numerical value.
+The correlations and concurrency between the SGI and drought index time series are studied.
+Further analysis was intended, but issues with the datasets postponed it.
 
 ## Repository Structure
 
 +--------------------------+--------------------------------------------------------------------------------------------------------------+
 | Folder/File              | Description                                                                                                  |
 +==========================+==============================================================================================================+
-| `code/`                  | Separate files for analysis code                                                                             |
-+--------------------------+--------------------------------------------------------------------------------------------------------------+
 | `inputs/`                | Stores all input data required                                                                               |
 +--------------------------+--------------------------------------------------------------------------------------------------------------+
 | `inputs/manual/`         | Input data requiring a manual download. Contents not committed to repository.                                |
 +--------------------------+--------------------------------------------------------------------------------------------------------------+
 | `inputs/auto/`           | Stores automatically downloaded datasets. Contents not committed to repository.                              |
 +--------------------------+--------------------------------------------------------------------------------------------------------------+
-| `processed_data/`        | analysis-ready datasets                                                                                      |
-+--------------------------+--------------------------------------------------------------------------------------------------------------+
-| `model_data/`            | Saved model outputs, model configuration files, predictions                                                  |
+| `analysis_ready/`        | Analysis-ready datasets (No saved model outputs, model configuration files, predictions)                     |
 +--------------------------+--------------------------------------------------------------------------------------------------------------+
 | `figures/`               | Figures, tables, graphs, and data-derivatives (e.g. summary statistics) displayed in manuscript text         |
 +--------------------------+--------------------------------------------------------------------------------------------------------------+
 | `run_reproducibility.R`  | Reproducibility wrapper                                                                                      |
 +--------------------------+--------------------------------------------------------------------------------------------------------------+
-| `CITATION.cff`           | Citation metadata, sourced directly from Zenodo                                                              |
-+--------------------------+--------------------------------------------------------------------------------------------------------------+
 
 ## How to Reproduce
-
 0. Install the R language v.4.5.3.
 1. Install the Positron IDE, which will come bundled with Quarto. Alternatively install Quarto CLI.
 2. Download all datasets with "Download" access in the above table. Place them directly into `inputs/manual/`.\
+   (Only the GW dataset used. Contact for details on what data to download...)
 3. Run the file `run_reproducibility.R`.
 
 ### Computational requirements
-The code has been tested on:
-
--   Windows operating system
--   Intel Core Ultra 5 125H, 14 cores
--   32 Gb of RAM\
-    Any sufficiently modern computer should manage to run the code. Linux or MacOS systems should also be compatable.
+The code has been tested on:  
+- Windows operating system
+- Intel Core Ultra 5 125H, 14 cores
+- 32 Gb of RAM\
+Any sufficiently modern computer should manage to run the code. Linux or MacOS systems should also be compatable.
 
 ### Data access configurations
-No special tokens to change.
+The drought index data downloads require an API key for European Centre for Medium-Range Weather Forecasts services.
+This key can be obtained by registering an ECMWF account on <https://www.ecmwf.int/>, and viewing the key from your personal profile.
+The script should ask for this key automatically. It can also be provided by running the command `ecmwfr::wf_set_key()`
 
 
 ## Results
-Display key figures in `/figures` folder, with description: ![Example](figures/example.png)
+
+The scope of this project was initially too broad. Ultimately, only two main datasets were used: the Finnish national GW dataset and the ERA5-based drought index (SPI & SPEI) dataset.
+The main reason for this was the overhead related to learning to use and format these notebooks.
+Working with large tables with a lot of text and links (the data sources table above) is also a huge pain!
+It would be wiser to format such table in an excel file, and to convert to Markdown only as needed.
+
+Another reason for the project ending up more limited was that the main drought index dataset used was found to be of bad quality, or at least unsuitable for the kind of analysis carried out here.
+More details on this are noted in the `SE4_results_viz` notebook.
+The main reason is that the dataset appears unsuitable for small scale analysis.
+Each GW stations was represented by a single ~28x28 km pixel of drought the index dataset.
+However, when examined like this, all indices had very apparent errors, an example shown below.
+![A SPEI-6 time series of a station with regular extreme spikes](/figures/bad-station-ts.png)
+
+These errors make it impossible to study the relationships between GW levels and the drought indices:
+![A station with bad SPEI-6 time series](/figures/bad-rmse-station.png)
+
+Similar bad time series were very prevelant across the dataset:
+![All bad time series of stations, identified based on non-normality of the standardized index](/figures/bad-stations-map.png)
+
 
 The code also produces intermediary files suitable for further analysis into the folder `analysis-ready`.
 These are produced by and documented in `SE2_data_processing.qmd`
 
 ## How to cite
 Pöykkö, P., 2026. Drought index assessment for groundwater drought prediction. \[software\] https://doi.org/XXXXXXXXX\
-DOI: **DOI_PENDING**
+DOI: **DOI_PENDING** The project will not be uploaded to online services.
 
 ## License
+MIT
 
 ## Contribution Guidelines
 Contributions that improve the quality, clarity, and reproducibility of this project are welcome.
-
 -   Open an issue before making major or result-affecting changes.
 -   Keep pull requests focused and clearly describe what changed and why.
 -   Follow existing code style and update documentation as needed.
