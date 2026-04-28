@@ -3,7 +3,16 @@ title: "Standard Element 1"
 subtitle: "Download source data"
 author: "Pietari Pöykkö"
 date: last-modified
-format: html
+number-sections: true
+format:
+  html:
+    fig-format: svg
+    page-layout: article  # enable margins etc.
+    embed-resources: true # standalone html file
+    code-fold: true       # fold all code initially
+    smooth-scroll: true
+    grid:
+      margin-width: 500px # wider right margin for figures
 ---
 
 The Finnish natural-state groundwater data central in this analysis is not available
@@ -24,11 +33,16 @@ These are not committed to the repository, using .gitignore.
 
 
 ## Data description
-Describe your data sources here. Reference the table provided on your README.
+This notebook reads in the GW data from CSV files placed in `inputs/manual/` folder.
+Notes on obtaining this data and relevant links are provided in `README`.
+Also, monthly drought index time series (SPI & SPEI) from the ECMWF Climate Data Store are downloaded here.
+The relevant links are found in `README`, and the API-call parameters are documented in code below.
+More details are also provided in the other notebooks.
 
 ## How to run this notebook
-Provide a detailed description of inputs, input directories, outputs, and output directories.
-
+This notebook can be run stand-alone, but is intended to be executed as part of the whole project.
+The project can be executed with `run_reproducibility.R`.
+Running this file outputs the drought index dataset NetCDF files into `/inputs/auto/ecmwfr_spi_spei_monthly/`, and loads the GW dataset into memory.
 
 ## Storage requirements
 The total storage required for running this notebook is 1.1 Gb.
@@ -51,6 +65,7 @@ if ((ps::ps_disk_usage()$available / 2^30) < 2) { # Gb
 source("_common.R") # Knitr hook to enable global R-env when rendering many .qmd
 ```
 
+## Project set-up
 ```{r init}
 here::i_am("SE1_data_access.qmd")
 root = here::here()
@@ -64,34 +79,6 @@ if (length(fs::dir_ls(fs::path(raw_data_dir, "manual"))) < 4L) { # TODO: set pre
 }
 ```
 
-## Define download file helper functions
-These functions will download files from URLs to the raw data folder created in the current repository. 
-```{r helpers-for-download}
-get_filename_from_url <- function(url) {
-    httr2::url_parse(url)$path |> basename()
-}
-download_file <- function(url, out_dir, t_out) {
-    old_o <-  options(timeout = max(300, getOption("timeout"))) # why this is needed...
-    on.exit({options(old_o)}, add=TRUE)
-
-    filename <- get_filename_from_url(url)
-
-    filepath <- fs::path(out_dir, filename)
-    if (fs::file_exists(filepath)) {
-        message("File already exists, skipping: ", filename)
-        return(TRUE)
-    } else {
-        message("Downloading: ", filename)
-        req <- httr2::request(url) |>
-            httr2::req_retry(max_tries=3, max_seconds=t_out,
-                retry_on_failure=TRUE,backoff=\(x){2}) |>
-            httr2::req_progress()
-        httr2::req_perform(req, path = filepath)
-        message("✅ Saved: ", filepath)
-        return(TRUE)
-    }
-}
-```
 
 ## Read in manually accessed GW data
 ```{r load-manual-data}
@@ -103,6 +90,7 @@ pipes <- data.table::fread(fs::path(raw_data_dir,"manual/paikat.csv"), keepLeadi
 
 
 ## Download SPI & SPEI timeseries data
+Set behaviour variables.
 ```{r}
 # ===== USER SETTINGS FOR SPI & SPEI DATA =====
 OUTPUT_DIR <- fs::dir_create(raw_data_dir,"auto","ecmwfr_spi_spei_monthly")
@@ -110,8 +98,10 @@ TIMEOUT <- 2000 # Seconds before req timeout
 # =============================================
 ```
 
+Check for API ECMWF API key.
+Download approppriately filtered drought index datasets.
 ```{r download-spi-spei}
-tryCatch(invisible(ecmwfr::wf_get_key()), # Check for ECMWFR API key
+tryCatch(invisible(ecmwfr::wf_get_key()), # Check for ECMWF API key
     error=\(e){ warning("Add ECMWF API key (ecmwfr::wf_set_key())")
                 ecmwfr::wf_set_key()
               }
@@ -170,8 +160,3 @@ rm(wanted_req_files, existing_req_files, needed_ecmwf_reqs, all_ecmwf_reqs, out_
 ```{r finish}
 message("Finished")
 ```
-
-Download FMI's daily gridded data from around all pipes where natural QC'd GW data exists.
-Data DOI reference: https://doi.org/10.35614/ISSN-2341-6408-IK-2022-11-RL
-AWS S3 link assumed to be stable enough
-[DRAFT, likely will be deleted]
