@@ -3,20 +3,21 @@ title: "Standard Element 3"
 subtitle: "Model training, validation, and interpretation"
 author: "Pietari Pöykkö"
 date: last-modified
-format: html
+number-sections: true
+format:
+  html:
+    fig-format: svg
+    page-layout: article  # enable margins etc.
+    embed-resources: true # standalone html file
+    code-fold: true       # fold all code initially
+    smooth-scroll: true
+    grid:
+      margin-width: 500px # wider right margin for figures
 ---
 
-This submission includes:
-
-Python or R code for training a statitical model
-Python or R code to extract relevant information from model output
-Python or R code to calculate model fit coefficients.
-README is edited detailing workflow of model train code, including locations of inputs and outputs in your project directory.
-Note: having a plan for your figures will make your life easier for deciding what relevant information you need to plan for model output!
-
-Be sure to edit your Data and methods document with any updates from this stage of analysis, and get started writing your results and discussion!
-
-Reference for best practices for model development: https://journals.ametsoc.org/view/journals/aies/2/2/AIES-D-22-0065.1.xml 
+This notebook contains the "modelling" part of the project.
+Here the relationships between the SGI and drought indices are examined.
+This file also produces some summaries of the performance of various parameters.
 
 ```{r}
 #| label: "common"
@@ -26,6 +27,7 @@ if(!interactive()) {
 }
 ```
 
+Create temporally lagged versions of all the drought indices (-6 to +12 months). These are needed for the "modelling" part.
 ```{r create-lagged-indices}
 lags <- -6:12 # Range of lags to examine (months)
 lag_cols <- paste0("value_lag_",lags) # Col names for lagged values
@@ -59,6 +61,9 @@ pipe_lag_inds[,    lag_months := as.integer(gsub("value_lag_", "", lag_months))]
 
 ```
 
+Calculate the Pearson's correlation coefficients between all the drought indices and the SGI time series.
+This is done on both the station and the pipe level.
+The best-correlating combinations of drought index accumulation period and temporal lag are also saved.
 ```{r drought-index-correlation}
 # Function to re-format cor.test output into 1-long lists (output will stay as 1 row when applying in dt)
 dt_cor.test <- function(...) {
@@ -150,6 +155,10 @@ ggplot(pipe_cor_smry, aes(ind_type, estimate)) +
 # Alt to `table`: xtabs(~ lag_months + ind_accum, data = station_cor_smry)
 ```
 
+
+Calculate the RMSE between all the drought indices and the SGI time series.
+This is done on both the station and the pipe level.
+Do a similar summarization of the best combinations.
 ```{r drought-index-RMSE}
 pipe_rmse <- pipe_lag_inds[, .(RMSE=DescTools::RMSE(lagged_value, sgi, na.rm=T)), # SGI is ref
     by=list(paikka_id,station_id, dr_ind,ind_type,ind_accum, lag_months)]
@@ -187,18 +196,6 @@ dplyr::group_by(pipe_rmse_smry, ind_type) |>
     theme_bw()
 ```
 
-```{r, join-further-lags}
-# Take the best correlation accum + lag values, and join to them more lagged values
-# Compare the differences. How much would we lose correlation if using larger lag?
-pipe_cor_smry[pipe_cor[lag_months==0]]
-
-pipe_cor_smry[ind_accum==24]
-
-SEI::plot_sei(station_spi_spei_ts[station_id == "0302" & dr_ind == "SPEI24"]$value)
-station_lag_inds[,unique(station_id)]
-```
-
-
 # Auto- and cross-correlations
 Look into how the SGI is autocorrelated, and how the SGI cross-correlates with other indices.
 ```{r explore-acf-ccf}
@@ -231,15 +228,3 @@ plot(ccf_test$sgi, ccf_test$value)
     - look at how they are tied to the ACF decay, and to the unsat.zone thickness
  - calculate correlations of SGI and dr-indices only with <0 values. (seems to have worse corr.)
     - also look at whether the unsat.zone thickness explains a site's discrepency between >0 and <0 correlations
-
-Miten eri indeksien mukaan Suomessa on ollut kuivuutta? Myös alueellinen tarkastelu.
-Kysy Laurilta.
-
-
-Test out buffering around pipes
-```{r}
-BUFF_M <- 200
-areas_around_pipes <- pipes[paikka_id %in% G$paikka_id][,.(lon_min=lon-BUFF_M, lon_max=lon+BUFF_M,lat_min=lat-BUFF_M, lat_max=lat+BUFF_M), by=paikka_id]
-```
-
-
