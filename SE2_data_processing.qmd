@@ -3,7 +3,16 @@ title: "Standard Element 2"
 subtitle: "Data processing script"
 author: "Pietari Pöykkö"
 date: last-modified
-format: html
+number-sections: true
+format:
+  html:
+    fig-format: svg
+    page-layout: article  # enable margins etc.
+    embed-resources: true # standalone html file
+    code-fold: true       # fold all code initially
+    smooth-scroll: true
+    grid:
+      margin-width: 500px # wider right margin for figures
 ---
 
 # Input data description
@@ -40,10 +49,10 @@ format: html
 
 Both analysis ready datasets have a monthly temporal resolution.
 Both datasets are contained within Finland, and cover the most of Finland
-
+These objects are saved into `analysis-ready/` folder.
 
 ## Modelling framework:
-The modelling is done entirely using the freely available R-language (v.4.5.0).
+The modelling is done entirely using the freely available R-language.
 The reproducibility of this workflow is ensured with the `renv` package.
 Libraries should be handled automatically, and all required are listed in `renv.lock`. See `?renv::restore()` for help if needed.
 
@@ -57,8 +66,10 @@ The original GW data is aggregated into montly time series for all pipes.
 From these, SGI timeseries are calculated for all pipes.
 Stations also get their aggregated monthly SGI series (pipe median)
 
-SGI series are then correlated with SPI & SPEI time series.
-**The interpretation and visualization are still in progress. The correlation might also get more sophisticated.**
+SGI series are then correlated with SPI & SPEI time series. The concurrency is also estimated by calculating the RMSE.
+This same analysis is also performed on the level of time series for individual pipes for comparison.
+
+**The analysis of correlation was intended get more sophisticated. Issues with the datasets postponed this past this WaterDigitalization project schedule.**
 
 ## How to use this notebook:
 This notebook can be run with Quarto installed. The easiest way to achieve this is to use the Positron IDE.
@@ -73,6 +84,7 @@ if(!interactive()) {
 ```
 
 # SPI & SPEI data processing
+List the files, and interpret the contents based on the file name.
 ```{r parse-spi-spei-files}
 # Extract variables and dates from SPI & SPEI filenames
 spi_spei_nc_files <- fs::dir_ls(out_dir_final, type="file",glob="*.nc")
@@ -90,6 +102,7 @@ file_meta <- tibble::tibble(filepath = as.character(spi_spei_nc_files)) |>
   ) |> data.table::as.data.table()
 ```
 
+Transform GW station coordinates for drought index subsetting.
 ```{r interpret-station-coordinates}
 # Get a spatial object of station coordinates
 station_coords <- sf::st_as_sf(stations[,.(station_id=tunnus,lon,lat)],
@@ -98,6 +111,7 @@ station_coords <- sf::st_as_sf(stations[,.(station_id=tunnus,lon,lat)],
 # TODO: Ensure that coordinates are correct, in teh approx. center of the pipes!
 ```
 
+Extract all variants of drought index time series for all GW stations from the .nc files.
 ```{r build-spi-spei-timeseries}
 # A function to process a single variable efficiently
 extract_timeseries <- function(var_name, files_df, pts_sf) {
@@ -153,6 +167,7 @@ station_spi_spei_ts[, time := lubridate::make_date(year, month, 1)]
 data.table::setnames(station_spi_spei_ts, "variable", "dr_ind")
 ```
 
+Remove the prominent outlier values from the drought index time series.
 ```{r QC-SPI-SPEI}
 # Eliminate clear error values of SPI & SPEI timeseries
 station_spi_spei_ts <- station_spi_spei_ts[value > -1000]
@@ -162,6 +177,7 @@ station_spi_spei_ts[,sum(abs(value) > 4), by=list(station_id,dr_ind)][order(V1)]
 
 ```
 
+Test the workflow for transforming GW levels into SGI for an individual pipe.
 ```{r test-SGI-ts}
 # Aggregate GW levels to yearmon timeseries
 pipedata <- G[paikka_id == 10550, .(g=mean(g)), by=yearmon(pvm)]
@@ -184,6 +200,7 @@ colnames(pipesgi$si) <- "SGI"
 SEI::plot_sei(pipesgi$si)
 ```
 
+Transform all GW levels of all pipes into SGI time series for comparing with the drought indices.
 ```{r construct-SGI-pipe-timeseries}
 # Aggregate GW levels to yearmon timeseries for all pipes
 G_ym <- data.table::copy(G[, .(g=mean(g)), by=list(paikka_id, yearmon=data.table::yearmon(pvm))])
@@ -232,11 +249,13 @@ rm(pipe_sgi_path)
 SEI::plot_sei(xts::as.xts(pipe_sgi_long[paikka_id == 9524,.(time=as.POSIXlt(time),sgi)]))
 ```
 
+Aggregate SGIs of pipes also to station-level time series.
 ```{r SGI-station-timeseries}
 # Calculate station SGI series by taking a median of all pipes of the station
 station_sgi_long <- pipe_sgi_long[,.(sgi = median(sgi)), by=list(station_id, time)]
 ```
 
+Temporally join the drought index and SGI time series.
 ```{r join-sgi-to-drs}
 # (wide approach)
 # Values of SPI & SPEI in wide format for all stations, 1965-2025
