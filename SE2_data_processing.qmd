@@ -57,14 +57,12 @@ The reproducibility of this workflow is ensured with the `renv` package.
 Libraries should be handled automatically, and all required are listed in `renv.lock`. See `?renv::restore()` for help if needed.
 
 ## Data processing steps:
-(Describe operations required to convert raw data to analysis ready data using [plain language](https://www.gov.uk/government/publications/geospatial-glossary/geospatial-glossary))
-
 SPI & SPEI index values are read from the .nc files. (Point-like time series for all stations)
-Erroneous (< -1000) SPI & SPEI index values are removed. No other outliers.
+Erroneous (< -1000) SPI & SPEI index values are removed. No other apparent outliers.
 
 The original GW data is aggregated into montly time series for all pipes.
 From these, SGI timeseries are calculated for all pipes.
-Stations also get their aggregated monthly SGI series (pipe median)
+Stations also get their aggregated monthly SGI series (median of station's pipes)
 
 SGI series are then correlated with SPI & SPEI time series. The concurrency is also estimated by calculating the RMSE.
 This same analysis is also performed on the level of time series for individual pipes for comparison.

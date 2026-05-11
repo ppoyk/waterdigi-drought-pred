@@ -15,20 +15,19 @@ format:
       margin-width: 500px # wider right margin for figures
 ---
 
-The Finnish natural-state groundwater data central in this analysis is not available
-as one contained dataset. This data has not been productized. Instead, data must
-be downloaded manually through the Hertta open data portal of Syke, with a manual
-selection of stations. Link to this portal is provided in README. Additionally,
-I have trimmed down the data from natural-state stations to only contain maximally
-long time series. Moreover, I have quality-controlled this dataset. The QC
-procedure is described in Pöykkö et al. 2026.
-I have not asked for a permission to share this customized dataset in a data repository.
+Although central in this analysis, the Finnish natural-state groundwater data is not available
+as one contained, productized, dataset. Instead, the data must be downloaded
+manually through the Hertta open data portal of Syke, with a manual selection of
+stations. Link to this portal is provided in README. Additionally, I have trimmed
+down the data from natural-state stations to only contain maximally long time
+series, and also quality-controlled this data. The QC procedure is described in
+Pöykkö et al. 2026. I have not investigated to get a permission to share this customized dataset publicly.
 
 Running this notebook additionally requires an API key for European Centre for Medium-Range Weather Forecasts services.
 This key can be obtained by registering an ECMWF account on <https://www.ecmwf.int/>, and viewing the key from your personal profile.
 The script will ask for this key automatically, or it can be provided by running the command `ecmwfr::wf_set_key()`
 
-The raw data is stored in the project subfolders of `inputs`.
+The raw data is stored in the project subfolder `inputs`.
 These are not committed to the repository, using .gitignore.
 
 
@@ -98,8 +97,8 @@ TIMEOUT <- 2000 # Seconds before req timeout
 # =============================================
 ```
 
-Check for API ECMWF API key.
-Download approppriately filtered drought index datasets.
+Download approppriately subsetted drought index datasets.
+(Also checks for ECMWF API key.)
 ```{r download-spi-spei}
 tryCatch(invisible(ecmwfr::wf_get_key()), # Check for ECMWF API key
     error=\(e){ warning("Add ECMWF API key (ecmwfr::wf_set_key())")
