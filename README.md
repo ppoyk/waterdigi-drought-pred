@@ -1,6 +1,9 @@
-Pietari Pöykkö
 
-<!-- This file will be rendered as both HTML for the website version, and as md for repo frontpage -->
+
+<!--
+This file will be rendered as both HTML for the website version, and as markdown for repo frontpage 
+Therefore, only edit the `.qmd` version of README.
+-->
 
 # Drought index assessment for groundwater drought prediction
 
