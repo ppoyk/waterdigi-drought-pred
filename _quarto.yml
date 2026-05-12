@@ -10,7 +10,7 @@ project:
     - index.qmd
   post-render: post-render.R
 execute:
-  freeze: auto
+  freeze: auto # auto/true only if environment.RData is not deleted between runs. also needed for gh-pages
 
 website:
   navbar:
