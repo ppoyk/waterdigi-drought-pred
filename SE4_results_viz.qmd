@@ -91,7 +91,9 @@ Details on the data downloads and processing can be found in the previous notebo
 A technical workaround (`_common.R`) was used to get multiple consequtive Quarto documents to share one R environment.
 This could have been avoided by saving intermediary data processing products on disk in tabular format.
 However, the approach taken brings some convenience. All object classes, factor levels and their order etc. are now preserved. Saving objects as `csv`s would require writing wrapper functions for file-reading to ensure consistent object attributes/metadata. These intermediary data files need to only be valid for the duration of the project rendering, so "universal" storage is not necessary. Some heavy object calculation results were saved also on disk for more rapid code development.  
-By the end of making this document I learned that perhaps this is not ideal, as loading and saving the environment every time you want to render a file gets quite slow. And getting a notebook render to visually look just the way you like it *takes A LOT of tweaking*!!! The rendering time could be reduced if only the absolute necessary objects were loaded from their specific files.
+By the end of making this document I learned that perhaps this is not ideal, as loading and saving the environment every time you want to render a file gets quite slow. And getting a notebook render to visually look just the way you like it *takes A LOT of tweaking*!!! The rendering time could be reduced if only the absolute necessary objects were loaded from their specific files. This approach, as recommended by the course materials,
+would have also improved the portability and reprodicibility of the code, as all the object dependencies would
+have been more explicit in the code.
 
 
 # Discovering the issues
