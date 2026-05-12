@@ -5,6 +5,7 @@ date: last-modified
 number-sections: true
 format:
   html:
+    code-fold: true
     grid:
       margin-width: 500px # wider right margin for figures
 ---
@@ -217,35 +218,38 @@ ggplot(na.omit(spei6_val_long), aes(factor(month(as.Date(time))), value)) +
 ## Spatial view
 When compared to the locations of all stations included in this study (@fig-stations-map), stations with non-normal (Shapiro-Wilk test $\alpha \gt 0.05$) distributions of drought index time series values are very common with shorter accumulation periods, and approximately equally common between SPI and SPEI (@fig-nonnorm-map). There does not seem to be any strong spatial groupings in non-normal stations compared to the locations of all stations (@fig-maps).
 
-:::: {#fig-maps .column-page layout="[3,8]"}
-::: {#fig-stations-map}
-```{r}
-#| fig-width: 1.6 # smaller scale
-#| fig-asp: 1.7   # quite vertical plot
-#| out-width: 140%
-ggplot() +
-  geom_sf(data=rnaturalearth::ne_countries(country=c("finland","aland"),scale="large", returnclass="sf")) +
-  geom_sf(data=dplyr::filter(station_coords, station_id %in% station_sgi_w_dr_inds$station_id), aes(geometry=geometry), alpha=0.5) +
-  theme_void()
-```
-The locations of all stations included in this study.
-:::
-::: {#fig-nonnorm-map}
-```{r}
-#| fig-width: 5.5
-dr_ind_ts_normality <- station_sgi_w_dr_inds[,c(shapiro.test(value), .(ind_type=unique(ind_type), ind_accum=unique(ind_accum))), by=list(station_id,dr_ind)]
-dr_ind_ts_normality[p.value > 0.05][station_coords, on="station_id", nomatch=NULL] |> 
-  ggplot() +
-  geom_sf(data=rnaturalearth::ne_countries(country=c("finland","aland"),scale="large", returnclass="sf")) +
-  geom_sf(aes(geometry=geometry), alpha=0.5) +
-  facet_grid(rows=vars(ind_type), cols=vars(ind_accum)) +
-  theme_void()
-ggsave("bad-stations-map.png", path=dir_figs, width=fig_width, height=fig_height) # save last plot
-```
-The locations of stations with non-normal distributions of drought index time series values. The panel columns correspond to index accumulation periods, and the rows correspond to the drought indices.
-:::
+:::: {#fig-maps} 
+:::: {.list-table header-rows=0 tbl-colwidths="[25,75]" layout-valign="bottom"} 
+* - ::: {#fig-stations-map}
+    ```{r}
+    #| fig-width: 1.6 # smaller scale
+    #| fig-asp: 1.7   # quite vertical plot
+    ggplot() +
+      geom_sf(data=rnaturalearth::ne_countries(country=c("finland","aland"),scale="large", returnclass="sf")) +
+      geom_sf(data=dplyr::filter(station_coords, station_id %in% station_sgi_w_dr_inds$station_id), aes(geometry=geometry), alpha=0.5) +
+      theme_void()
+    ```
+    The locations of all stations included in this study.
+    :::
+  - ::: {#fig-nonnorm-map}
+    ```{r}
+    #| fig-width: 5.5
+    dr_ind_ts_normality <- station_sgi_w_dr_inds[,c(shapiro.test(value), .(ind_type=unique(ind_type), ind_accum=unique(ind_accum))), by=list(station_id,dr_ind)]
+    dr_ind_ts_normality[p.value > 0.05][station_coords, on="station_id", nomatch=NULL] |> 
+      ggplot() +
+      geom_sf(data=rnaturalearth::ne_countries(country=c("finland","aland"),scale="large", returnclass="sf")) +
+      geom_sf(aes(geometry=geometry), alpha=0.5) +
+      facet_grid(rows=vars(ind_type), cols=vars(ind_accum)) +
+      theme_void()
+    ggsave("bad-stations-map.png", path=dir_figs, width=fig_width, height=fig_height) # save last plot
+    ```
+    The locations of stations with non-normal distributions of drought index time series values. The panel columns correspond to index accumulation periods, and the rows correspond to the drought indices.
+    :::
+
+::::
 A spatial view comparing likely bad drought index time series to the distribution of the studied stations.
 ::::
+
 
 # Questions to investigate
 There is still a lot left to look into.
