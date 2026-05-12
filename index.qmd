@@ -1,0 +1,36 @@
+---
+title: "Website Directory"
+listing:
+  id: all-se-articles
+  contents:        # show README and all standard elements in the listing
+    - "README.qmd"
+    - "SE*.qmd"
+    - "!index.qmd" # do not list itself
+  type: grid
+  sort: "title asc"
+  categories: true
+  sort-ui: [title, date]
+  filter-ui: true
+  fields: [image, date, title, subtitle, description, reading-time]
+---
+<!--
+Key Options Explained:
+contents: The *.qmd tells Quarto to look for all Quarto markdown files in the current directory. !index.qmd specifically excludes this title page so it doesn't list itself. If your pages are inside a specific folder (like docs/ or pages/), you can change this to contents: "pages/*.qmd".
+
+type: grid displays the pages as a visual grid of cards. You can change this to default (a standard blog-style list) or table (a compact data table).
+
+sort: Alphabetizes the pages by their title. You can also sort by date desc if your pages have dates in their individual YAML headers.
+
+categories, sort-ui, filter-ui: These enable interactive elements on your rendered page. They add a sidebar with clickable categories and search/sort bars at the top, making it easy to navigate a large number of pages.
+
+fields: Dictates which metadata from the other pages will show up on the cards. If a page doesn't have an image or a date, Quarto will simply leave that field blank.
+-->
+
+Welcome to the site! Below you will find a directory of all available pages.
+
+::: {#all-se-articles}
+:::
+
+
+
+All project pages are found above.

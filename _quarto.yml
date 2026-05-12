@@ -1,0 +1,66 @@
+project:
+  type: website
+  output-dir: docs
+  render:  # define rendering order
+    - SE1*.qmd
+    - SE2*.qmd
+    - SE3*.qmd
+    - SE4*.qmd
+    - README.qmd
+    - index.qmd
+  post-render: post-render.R
+execute:
+  freeze: auto
+
+website:
+  navbar:
+    background: primary
+    left:
+      - href: index.qmd
+        text: Home
+
+format:   ## File rendering options
+  html:
+    fig-format: svg       # vector plots
+    lightbox: true        # can click on pictures
+    page-layout: article  # enable margins etc.
+    embed-resources: true # standalone html files
+    smooth-scroll: true
+    link-external-icon: true
+    link-external-newwindow: true
+date-format: iso
+
+author:
+  - name:
+      given: "Pietari"
+      family: "Pöykkö"
+    degrees: "MSc (tech)"
+    orcid: "0009-0000-1214-5336"
+    corresponding: true
+    email: pietari.poykko@oulu.fi
+    roles:
+      - investigation
+      - project administration
+      - software
+      - visualization
+      - formal analysis
+      - writing - original draft
+    affiliations:
+      - ref: ou
+affiliations:
+  - id: ou
+    name: "University of Oulu"
+    department: "Water, Energy and Environmental Engineering Research Unit (WE3)"
+    address: "Pentti Kaiteran katu 1, Linnanmaa"
+    city: "Oulu"
+    region: "North Ostrobothnia"
+    country: "Finland"
+    postal-code: "FI-90014"
+    url: "https://www.oulu.fi/en"
+    isni: 0000000404505858
+    ror: "https://ror.org/03yj89h83"
+
+keywords:
+  - drought indices
+  - SGI
+  - drought prediction

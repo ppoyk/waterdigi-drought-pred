@@ -6,16 +6,15 @@
 environment.RData
 
 # Script output #
-/output*
-/analysis_ready*
+/analysis_ready/*
 *.html
 *.pdf
 *.png
 *.svg
 
-# Artifacts #
-README_files
-README.html
+# Quarto publishing stuff
+/.quarto/
+/docs/
 
 # R specific files #
 .Rproj.user
@@ -46,3 +45,7 @@ README.html
 *.log
 *.sql
 *.sqlite
+
+**/*.quarto_ipynb
+
+/_*.local

@@ -1,18 +1,8 @@
 ---
 title: "Standard Element 2"
 subtitle: "Data processing script"
-author: "Pietari Pöykkö"
 date: last-modified
 number-sections: true
-format:
-  html:
-    fig-format: svg
-    page-layout: article  # enable margins etc.
-    embed-resources: true # standalone html file
-    code-fold: true       # fold all code initially
-    smooth-scroll: true
-    grid:
-      margin-width: 500px # wider right margin for figures
 ---
 
 # Input data description

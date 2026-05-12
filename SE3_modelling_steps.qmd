@@ -1,18 +1,11 @@
 ---
 title: "Standard Element 3"
 subtitle: "Model training, validation, and interpretation"
-author: "Pietari Pöykkö"
 date: last-modified
 number-sections: true
 format:
   html:
-    fig-format: svg
-    page-layout: article  # enable margins etc.
-    embed-resources: true # standalone html file
-    code-fold: true       # fold all code initially
-    smooth-scroll: true
-    grid:
-      margin-width: 500px # wider right margin for figures
+    fig-format: png  # svgs too large
 ---
 
 This notebook contains the "modelling" part of the project.

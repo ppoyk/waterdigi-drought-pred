@@ -1,18 +1,8 @@
 ---
 title: "Standard Element 1"
 subtitle: "Download source data"
-author: "Pietari Pöykkö"
 date: last-modified
 number-sections: true
-format:
-  html:
-    fig-format: svg
-    page-layout: article  # enable margins etc.
-    embed-resources: true # standalone html file
-    code-fold: true       # fold all code initially
-    smooth-scroll: true
-    grid:
-      margin-width: 500px # wider right margin for figures
 ---
 
 Although central in this analysis, the Finnish natural-state groundwater data is not available
@@ -101,9 +91,14 @@ Download approppriately subsetted drought index datasets.
 (Also checks for ECMWF API key.)
 ```{r download-spi-spei}
 tryCatch(invisible(ecmwfr::wf_get_key()), # Check for ECMWF API key
-    error=\(e){ warning("Add ECMWF API key (ecmwfr::wf_set_key())")
-                ecmwfr::wf_set_key()
-              }
+    error=\(e){ 
+        if (nzchar(Sys.getenv("ECMWF_KEY"))) { # Check for env var (supplied to gh rendering)
+            ecmwfr::wf_set_key(Sys.getenv("ECMWF_KEY"))
+        } else if (interactive()) {            # Ask user if interactive
+            warning("Add ECMWF API key (ecmwfr::wf_set_key())")
+            ecmwfr::wf_set_key()
+        } else { stop("ECMWF API key not found") }
+    }
 )
 # For more on ecmwfr datasets: ecmwfr::wf_dataset_info(), ecmwfr::wf_datasets()
 
