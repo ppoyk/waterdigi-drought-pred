@@ -2,8 +2,10 @@
 editor: source  # disable visual mode editing in IDE to avoid messing up the tables
 author: ""      # suppress prefixing the project-inherited author info
 format:
-  html: default # create html for project website and md for viewing the repo
-  gfm: default  # github-flavoured-md.  use "hugo" or `variant: +yaml_metadata_block` if header should be preserved
+  html:  # create html for project website and md for viewing the repo
+    title-block-banner: false
+  gfm:   # github-flavoured-md.  use "hugo" or `variant: +yaml_metadata_block` if header should be preserved
+    title-block-banner: false
 subtitle: "README"
 ---
 <!--
@@ -197,7 +199,7 @@ However, when examined like this, all indices had very apparent errors, an examp
 These errors make it impossible to study the relationships between GW levels and the drought indices:
 ![A station with bad SPEI-6 time series](/figures/bad-rmse-station.png)
 
-Similar bad time series were very prevelant across the dataset:
+Similar bad time series were very prevalent across the dataset:
 ![All bad time series of stations, identified based on non-normality of the standardized index](/figures/bad-stations-map.png)
 
 

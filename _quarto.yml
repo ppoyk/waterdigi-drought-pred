@@ -28,6 +28,9 @@ format:   ## File rendering options
     smooth-scroll: true
     link-external-icon: true
     link-external-newwindow: true
+    crossrefs-hover: true
+    citations-hover: true
+    footnotes-hover: true
 date-format: iso
 
 author:

@@ -303,7 +303,7 @@ These errors make it impossible to study the relationships between GW
 levels and the drought indices: ![A station with bad SPEI-6 time
 series](.\figures/bad-rmse-station.png)
 
-Similar bad time series were very prevelant across the dataset: ![All
+Similar bad time series were very prevalent across the dataset: ![All
 bad time series of stations, identified based on non-normality of the
 standardized index](.\figures/bad-stations-map.png)
 
