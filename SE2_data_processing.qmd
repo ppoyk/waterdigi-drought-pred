@@ -177,7 +177,6 @@ pipexts <- xts::as.xts(pipedata, order.by=pipedata$yearmon) # Turn into xts
 # Reference period to calculate SGI
 pipexts_ref <- pipexts["1980-01-01::2020-12-31"]
 # Calculate SGI
-insertSource("fix_SEI_std_index.R", package = "SEI", functions = "std_index") # Fix SEI::std_index... PR waiting
 pipesgi <- SEI::std_index(pipexts, x_ref=pipexts_ref,
     dist="kde", index_type="normal",
     gr_new = factor(xts::.indexmon(pipexts)), gr_ref = factor(xts::.indexmon(pipexts_ref)),
